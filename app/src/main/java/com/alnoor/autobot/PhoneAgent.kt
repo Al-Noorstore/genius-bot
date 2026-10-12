@@ -27,7 +27,7 @@ object PhoneAgent {
         RegexOption.IGNORE_CASE
     )
 
-    @Volatile var lastEls: List<AutoBotAccessibilityService.UiEl> = emptyList()   // v4.9: "screen list" ke baad "tap N" ke liye
+    @Volatile var lastEls: List<UiEl> = emptyList()   // v4.9: "screen list" ke baad "tap N" ke liye
     @Volatile var running = false; private set
     @Volatile private var stopFlag = false
     @Volatile private var waiting = false

@@ -11,6 +11,8 @@ import android.view.accessibility.AccessibilityNodeInfo
  * Genius Bit Accessibility — screen read / scroll / click / type (user enables in Settings).
  * UI nahi badalta; chat commands se control.
  */
+class UiEl(val node: AccessibilityNodeInfo, val label: String, val kind: String, val rect: Rect)
+
 class AutoBotAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
@@ -269,7 +271,6 @@ class AutoBotAccessibilityService : AccessibilityService() {
         }
 
         // ---------- v4.7 PHONE AGENT helpers (UI nahi badla, sirf engine) ----------
-        class UiEl(val node: AccessibilityNodeInfo, val label: String, val kind: String, val rect: Rect)
 
         /** Screen ke visible elements ki numbered list (agent isi se index chunta hai) */
         fun snapshot(max: Int = 70): List<UiEl> {
