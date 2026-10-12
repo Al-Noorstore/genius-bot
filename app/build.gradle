@@ -21,4 +21,5 @@ android {
     buildTypes { release { minifyEnabled false; signingConfig signingConfigs.release } }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
 }
-dependencies { implementation 'androidx.appcompat:appcompat:1.6.1' }
+
+// no dependencies — pure android.app
