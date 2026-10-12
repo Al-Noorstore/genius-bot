@@ -1,0 +1,98 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+// AutoBot LITE = no Python (chhota APK, low-RAM safe)   -> build: gradle assembleRelease -PliteBuild=true
+// AutoBot PRO  = Python 3.11 bundled (Chaquopy)         -> build: gradle assembleRelease
+def isLite = project.hasProperty('liteBuild')
+if (!isLite) {
+    apply plugin: 'com.chaquo.python'
+}
+
+android {
+    namespace 'com.alnoor.autobot'
+    compileSdk 34
+    ndkVersion "27.0.12077973"
+
+    defaultConfig {
+        // LITE purane app ki jagah lagta hai; PRO alag app "Auto Bot Pro" ke roop mein
+        applicationId isLite ? "com.alnoor.geniusbot" : "com.alnoor.geniusbot.pro"
+        minSdk 24
+        targetSdk 34
+        versionCode 58
+        versionName isLite ? "4.18-LITE" : "4.18-PRO"
+        ndk { abiFilters 'arm64-v8a', 'armeabi-v7a' }
+        resValue "string", "app_label", isLite ? "Genius Bot" : "Genius Bot Pro"
+
+        // v3.5 GGUF engine: llama.cpp (source CI mein app/src/main/cpp/llama.cpp par aata hai)
+        externalNativeBuild {
+            cmake {
+                cppFlags "-std=c++17 -O3"
+                arguments "-DANDROID_STL=c++_static"
+            }
+        }
+    }
+
+    sourceSets {
+        main {
+            // LITE: stub PyEngine (no Python) | PRO: asli PyEngine (Chaquopy)
+            java.srcDirs += isLite ? 'src/nopy/kotlin' : 'src/py/kotlin'
+            // PRO mein built-in Qwen model asset (src/pro/assets) — LITE mein nahi
+            assets.srcDirs = isLite ? ['src/main/assets'] : ['src/main/assets', 'src/pro/assets']
+        }
+    }
+
+    signingConfigs {
+        release {
+            storeFile rootProject.file("genius.p12")
+            storePassword "genius2026"
+            keyAlias "geniusbot"
+            keyPassword "genius2026"
+            storeType "PKCS12"
+        }
+    }
+    packagingOptions {
+        jniLibs { useLegacyPackaging = true }
+    }
+
+    buildTypes {
+        debug { minifyEnabled false }
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions { jvmTarget = "17" }
+    buildFeatures { buildConfig true }
+    externalNativeBuild { cmake { path "src/main/cpp/CMakeLists.txt"; version "3.22.1" } }
+    androidResources { noCompress 'gguf' }
+}
+
+if (!isLite) {
+    chaquopy {
+        defaultConfig {
+            version "3.11"
+            pip {
+                // core (pure Python) packages — app ke andar offline available
+                install "requests"
+                install "python-dateutil"
+                install "pytz"
+                install "beautifulsoup4"
+            }
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.13.1'
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    // v3.0: offline voice recognition (Vosk)
+    implementation 'com.alphacephei:vosk-android:0.3.75'
+    // v3.0: libsu — asli shell engine (root su support ke saath)
+    implementation 'com.github.topjohnwu.libsu:core:6.0.0'
+}
