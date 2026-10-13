@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Genius Bot</title>
+<link rel="icon" href="https://media.base44.com/images/public/6a98ccc4793eacdc89e1b50f/fa094e1e2_generated_image.png">
+<style>
+  :root {
+    --bg: #0f1115; --sidebar: #0b0d11; --panel: #1a1d24; --input: #1a1d24;
+    --text: #e8eaed; --muted: #9aa0a6; --accent: #3b82f6; --border: rgba(255,255,255,0.08);
+    --hov: rgba(255,255,255,0.06); --hov-br: rgba(255,255,255,0.14); --field: #22262e;
+    --send-bg: #3b82f6; --send-fg: #ffffff; --send-dis: rgba(255,255,255,0.08); --send-dis-fg: #6b7280;
+    --user-bubble: #1e3a5f; --bot-bubble: transparent; --radius: 16px;
+  }
+  body.light {
+    --bg: #f7f8fa; --sidebar: #ffffff; --panel: #ffffff; --input: #ffffff;
+    --text: #111827; --muted: #6b7280; --accent: #2563eb; --border: rgba(0,0,0,0.08);
+    --hov: rgba(0,0,0,0.04); --hov-br: rgba(0,0,0,0.12); --field: #f3f4f6;
+    --send-bg: #2563eb; --send-fg: #ffffff; --send-dis: rgba(0,0,0,0.06); --send-dis-fg: #9ca3af;
+    --user-bubble: #dbeafe; --bot-bubble: transparent; --radius: 16px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); display: flex; overflow: hidden; }
+
+  /* ---------- SIDEBAR ---------- */
+  #sidebar { width: 260px; background: var(--sidebar); display: flex; flex-direction: column; height: 100%; transition: transform .25s ease; z-index: 50; flex-shrink: 0; }
+  .side-top { padding: 10px; display: flex; align-items: center; gap: 10px; }
+  .hamb { background: none; border: none; color: var(--text); font-size: 20px; cursor: pointer; padding: 8px 10px; border-radius: 8px; }
+  .hamb:hover { background: var(--hov); }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 15px; }
+  .brand img { width: 28px; height: 28px; border-radius: 8px; }
+  #newchat { margin: 8px 10px; padding: 10px 14px; background: transparent; color: var(--text); border: 1px solid var(--border); border-radius: 24px; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+  #newchat:hover { background: var(--hov); }
+  nav { flex: 1; overflow-y: auto; padding: 6px 8px; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; cursor: pointer; color: var(--text); font-size: 14px; margin-bottom: 2px; border: none; background: none; width: 100%; text-align: left; }
+  .nav-item:hover { background: var(--hov); }
+  .nav-item.active { background: var(--hov); }
+  .nav-ico { width: 18px; text-align: center; }
+  .side-bot { padding: 12px 14px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--border); }
+  .badge { background: var(--accent); color: #fff; border-radius: 10px; font-size: 10px; padding: 1px 7px; margin-left: auto; }
+
+  /* ---------- MAIN ---------- */
+  #main { flex: 1; display: flex; flex-direction: column; height: 100%; min-width: 0; }
+  #topbar { display: none; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  #topbar .brand { font-size: 16px; }
+
+  #view { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+  #chatwrap { max-width: 780px; width: 100%; margin: 0 auto; padding: 20px 16px 8px; flex: 1; display: flex; flex-direction: column; }
+
+    /* chat bubbles — professional */
+  #msgs { padding-bottom: 100px; max-width: 820px; margin: 0 auto; width: 100%; }
+  .msg { display: flex; gap: 0; margin-bottom: 20px; align-items: flex-start; animation: msgIn .2s ease; }
+  @keyframes msgIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .msg.user { justify-content: flex-end; }
+  .msg.user .bcol { align-items: flex-end; }
+  .msg.user .bubble {
+    background: var(--user-bubble); color: var(--text);
+    border-radius: 18px 18px 4px 18px; padding: 12px 16px;
+    max-width: min(85%, 560px); white-space: pre-wrap; font-size: 15px; line-height: 1.5;
+    border: 1px solid var(--border);
+  }
+  .msg.bot { justify-content: flex-start; align-items: flex-start; }
+  .msg.bot .bcol { max-width: min(95%, 720px); width: 100%; }
+  .msg.bot .bubble {
+    background: var(--bot-bubble); color: var(--text);
+    border-radius: 4px 18px 18px 18px; padding: 4px 2px 8px;
+    max-width: 100%; white-space: pre-wrap; line-height: 1.65; font-size: 15.5px;
+    letter-spacing: 0.01em;
+  }
+  .msg.bot .av { display: none !important; }
+  .msg .copyrow { opacity: 0; transition: opacity .15s; margin-top: 4px; }
+  .msg:hover .copyrow { opacity: 1; }
+  .copybtn {
+    background: transparent; border: 1px solid var(--border); color: var(--muted);
+    font-size: 11px; padding: 4px 10px; border-radius: 8px; cursor: pointer;
+  }
+  .copybtn:hover { color: var(--text); border-color: var(--hov-br); }
+  .bubble.typing { display: flex; gap: 5px; padding: 12px 4px; }
+  .bubble.typing span {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--muted);
+    animation: typ 1.2s infinite ease-in-out;
+  }
+  .bubble.typing span:nth-child(2) { animation-delay: .15s; }
+  .bubble.typing span:nth-child(3) { animation-delay: .3s; }
+  @keyframes typ { 0%, 80%, 100% { opacity: .35; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } } /* no chat stickers */
+  .msg.bot .av { width: 28px; height: 28px; border-radius: 50%; margin-right: 10px; flex-shrink: 0; overflow: hidden; }
+  .typing span { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); margin-right: 4px; animation: blink 1.2s infinite; }
+  .typing span:nth-child(2){ animation-delay: .2s } .typing span:nth-child(3){ animation-delay: .4s }
+  @keyframes blink { 0%,80%,100%{ opacity:.25 } 40%{ opacity:1 } }
+
+  /* empty state */
+  #empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 20px; }
+  #empty img { width: 64px; height: 64px; border-radius: 16px; }
+  #empty h1 { font-size: 22px; font-weight: 600; }
+  #empty p { color: var(--muted); font-size: 14px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; max-width: 560px; }
+  .chip { background: transparent; border: 1px solid var(--border); color: var(--text); border-radius: 18px; padding: 8px 14px; font-size: 13px; cursor: pointer; }
+  .chip:hover { background: var(--hov); }
+
+  /* ---------- INPUT BAR (ChatGPT style) ---------- */
+  #inputbar { max-width: 780px; width: 100%; margin: 0 auto; padding: 8px 16px 14px; }
+  #inputbox {
+    background: var(--input); border-radius: 24px; border: 1px solid var(--border);
+    padding: 8px 10px 8px 8px; display: flex; align-items: flex-end; gap: 4px;
+    transition: border-color .2s, box-shadow .2s; box-shadow: 0 2px 12px rgba(0,0,0,0.12);
+  }
+  #inputbox:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
+  .ibtn { background: none; border: none; color: var(--text); width: 40px; height: 40px; border-radius: 50%; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .ibtn:hover { background: var(--hov); }
+  #plus { transform: scale(1.25); font-weight: 300; }
+  #msg { flex: 1; background: none; border: none; color: var(--text); font-size: 16px; font-family: inherit; resize: none; outline: none; max-height: 160px; line-height: 24px; padding: 8px 4px; }
+  #msg::placeholder { color: #8e8e8e; }
+  /* Mic recording — Grok-style pulse rings + bars */
+  #mic { position: relative; z-index: 2; }
+  #mic.rec { color: #ff3b5c !important; }
+  #mic.rec .mic-ico { animation: micPulse 1.1s ease-in-out infinite; }
+  @keyframes micPulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.12); opacity: 0.85; }
+  }
+  #mic-wrap { position: relative; width: 40px; height: 40px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  #mic-rings { position: absolute; inset: 0; pointer-events: none; display: none; }
+  #mic.rec ~ #mic-rings, #mic-wrap.rec #mic-rings { display: block; }
+  #mic-wrap.rec #mic-rings { display: block; }
+  .mic-ring {
+    position: absolute; left: 50%; top: 50%; width: 40px; height: 40px;
+    margin: -20px 0 0 -20px; border-radius: 50%;
+    border: 2px solid rgba(255, 59, 92, 0.55);
+    animation: micRing 1.4s ease-out infinite;
+  }
+  .mic-ring.r2 { animation-delay: 0.35s; border-color: rgba(255, 59, 92, 0.35); }
+  .mic-ring.r3 { animation-delay: 0.7s; border-color: rgba(255, 59, 92, 0.2); }
+  @keyframes micRing {
+    0% { transform: scale(0.85); opacity: 0.9; }
+    100% { transform: scale(2.1); opacity: 0; }
+  }
+  #mic-level {
+    display: none; align-items: flex-end; justify-content: center; gap: 3px;
+    height: 18px; margin: 0 0 6px 12px;
+  }
+  #mic-level.on { display: flex; }
+  #mic-level span {
+    width: 3px; border-radius: 2px; background: #ff3b5c;
+    height: 4px; transition: height 0.08s ease;
+    box-shadow: 0 0 6px rgba(255, 59, 92, 0.5);
+  }
+  #send { background: var(--send-bg); color: var(--send-fg); border: none; width: 34px; height: 34px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; margin: 3px; }
+  #send:disabled { background: var(--hov); color: #8e8e8e; cursor: default; }
+  #send svg { width: 16px; height: 16px; }
+  .att { display: inline-flex; align-items: center; gap: 6px; background: var(--hov); border-radius: 14px; padding: 4px 10px; font-size: 12px; margin: 4px 0 0 6px; }
+  #disclaimer { text-align: center; font-size: 11px; color: var(--muted); padding: 4px 0 6px; }
+
+  /* ---------- PANELS ---------- */
+  .panel { max-width: 900px; width: 100%; margin: 0 auto; padding: 24px 16px; display: none; }
+  .panel.show { display: block; }
+  .panel h2 { font-size: 20px; margin-bottom: 14px; display: flex; align-items: center; gap: 10px; }
+  .card { background: var(--panel); border-radius: 12px; padding: 14px 16px; margin-bottom: 10px; border: 1px solid var(--border); }
+  .card .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .card .sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .pbtn { background: var(--hov); color: var(--text); border: none; border-radius: 14px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
+  .pbtn:hover { background: var(--hov); }
+  .pbtn.ok { background: var(--accent); color: #fff; }
+  .pbtn.no { background: #ef4141; color: #fff; }
+  .pill { background: var(--accent); color: #fff; border-radius: 10px; font-size: 11px; padding: 2px 8px; }
+  .pill.off { background: #6b6b6b; }
+  input.field, select.field { background: var(--field); border: 1px solid var(--border); color: var(--text); border-radius: 10px; padding: 10px 12px; font-size: 14px; outline: none; width: 100%; margin-bottom: 10px; }
+  textarea.field { background: var(--field); border: 1px solid var(--border); color: var(--text); border-radius: 10px; padding: 10px 12px; font-size: 14px; outline: none; width: 100%; min-height: 70px; font-family: inherit; margin-bottom: 10px; resize: vertical; }
+  .go { background: var(--accent); color: #fff; border: none; border-radius: 20px; padding: 10px 20px; font-size: 14px; cursor: pointer; }
+  .go:hover { filter: brightness(1.1); }
+  ul.list { list-style: none; }
+  ul.list li { padding: 8px 4px; border-bottom: 1px solid var(--border); font-size: 14px; }
+  a.lnk { color: #7ab8ff; text-decoration: none; word-break: break-all; }
+  .empty-note { color: var(--muted); font-size: 13px; padding: 10px 0; }
+  #overlay { display: none; position: fixed; inset: 0; background: #00000088; z-index: 40; }
+
+  /* v3.1: copy buttons, history, toast */
+  .msg.bot .bcol { display: flex; flex-direction: column; max-width: 95%; }
+  .msg.user .bcol { display: flex; flex-direction: column; align-items: flex-end; max-width: 85%; }
+  .copyrow { display: flex; gap: 8px; margin-top: 2px; }
+  .msg.user .copyrow { justify-content: flex-end; }
+  .copybtn { background: none; border: none; color: var(--muted); font-size: 12px; cursor: pointer; padding: 4px 8px; border-radius: 8px; display: inline-flex; align-items: center; gap: 5px; }
+  .copybtn:hover { background: var(--hov); color: var(--text); }
+  #toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); background: var(--panel); color: var(--text); border: 1px solid var(--border); padding: 8px 18px; border-radius: 20px; font-size: 13px; z-index: 99; opacity: 0; transition: opacity .25s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+  #sideclose { display: none; }
+  .hist-item { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 8px; cursor: pointer; }
+  .hist-item:active { filter: brightness(1.15); }
+  .hist-main { flex: 1; min-width: 0; }
+  .hist-title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hist-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .hist-del { background: none; border: none; color: var(--muted); font-size: 16px; padding: 6px 10px; border-radius: 8px; }
+  .hist-del:hover { background: var(--hov); color: #ef4141; }
+
+  /* mobile */
+  @media (max-width: 768px) {
+    #sidebar { position: fixed; left: 0; top: 0; transform: translateX(-100%); }
+    #sidebar.open { transform: translateX(0); box-shadow: 12px 0 40px #000000aa; }
+    #topbar { display: flex; }
+    #chatwrap { padding: 14px 12px 6px; }
+    #empty h1 { font-size: 20px; }
+    #sideclose { display: block; }
+  }
+</style>
+</head>
+<body class="light">
+
+<div id="overlay" onclick="toggleSidebar()"></div>
+<div id="toast"></div>
+
+<aside id="sidebar">
+  <div class="side-top">
+    <button class="hamb" onclick="toggleSidebar()">&#9776;</button>
+    <div class="brand"><span class="logo-slot" style="width:28px;height:28px;display:inline-flex"></span> Genius Bot</div>
+    <button class="hamb" id="sideclose" onclick="toggleSidebar()" title="Close menu">&#10005;</button>
+  </div>
+  <button id="newchat" onclick="newChat()">+ &nbsp;New chat</button>
+  <nav>
+    <button class="nav-item active" data-view="chat" onclick="showView('chat')"><span class="nav-ico">💬</span> Chat</button>
+    <button class="nav-item" data-view="history" onclick="showView('history')"><span class="nav-ico">🗂️</span> History</button>
+    <button class="nav-item" data-view="tasks" onclick="showView('tasks')"><span class="nav-ico">⏱️</span> Tasks <span class="badge" id="bdg-tasks" style="display:none">0</span></button>
+    <button class="nav-item" data-view="approvals" onclick="showView('approvals')"><span class="nav-ico">✅</span> Approvals <span class="badge" id="bdg-appr" style="display:none">0</span></button>
+    <button class="nav-item" data-view="contacts" onclick="showView('contacts')"><span class="nav-ico">📱</span> Contacts</button>
+    <button class="nav-item" data-view="hunt" onclick="showView('hunt')"><span class="nav-ico">🚀</span> Product Hunt</button>
+    <button class="nav-item" data-view="buyers" onclick="showView('buyers')"><span class="nav-ico">🔎</span> Find Buyers</button>
+    <button class="nav-item" data-view="rules" onclick="showView('rules')"><span class="nav-ico">📜</span> Rules</button>
+    <button class="nav-item" data-view="memory" onclick="showView('memory')"><span class="nav-ico">🧠</span> Memory</button>
+    <button class="nav-item" data-view="sim" onclick="showView('sim')"><span class="nav-ico">📱</span> SIM Dialer</button>
+    <button class="nav-item" data-view="access" onclick="showView('access')"><span class="nav-ico">♿</span> Accessibility</button>
+    <button class="nav-item" onclick="toggleTheme()"><span class="nav-ico" id="theme-ico">🌙</span> <span id="theme-label">Dark mode</span></button>
+  </nav>
+  <div class="side-bot" id="side-bot">Genius Bot <span id="app-ver">v3.1</span> · e-commerce automation<br>Developed by Mr Wishal Noor 👑</div>
+</aside>
+
+<main id="main">
+  <div id="topbar">
+    <button class="hamb" onclick="toggleSidebar()">&#9776;</button>
+    <div class="brand"><span class="logo-slot" style="width:26px;height:26px;display:inline-flex"></span> Genius Bot</div>
+    <button class="hamb" style="margin-left:auto" onclick="newChat()" title="New chat">&#10010;</button>
+  </div>
+
+  <div id="view">
+    <!-- CHAT -->
+    <div id="chatwrap">
+      <div id="empty">
+        <span class="logo-slot" style="width:64px;height:64px;display:inline-flex"></span>
+        <h1>Genius Bot</h1>
+        <p>Professional assistant — commands, research, automationt, buyer research, contact save, rule yaad rakhna...</p>
+        <div class="chips">
+          <button class="chip" onclick="quick(this)">Task product hunt daily US</button>
+          <button class="chip" onclick="quick(this)">Contact Ali 03001234567</button>
+          <button class="chip" onclick="quick(this)">Rule har purchase se pehle approval lo</button>
+          <button class="chip" onclick="quick(this)">Status</button>
+        </div>
+      </div>
+      <div id="msgs"></div>
+    </div>
+
+    <!-- PANELS -->
+    <div class="panel" id="p-tasks">
+      <h2>⏱️ Tasks</h2>
+      <select class="field" id="t-type"><option value="product-hunt">Product Hunt (Google Trends)</option><option value="find-buyers">Find Buyers</option><option value="alibaba-deal">Alibaba Deal Research</option><option value="upload-approved">Upload Approved Products</option></select>
+      <select class="field" id="t-geo"><option>US</option><option>UK</option><option>PK</option><option>DE</option><option>CA</option><option>AU</option></select>
+      <button class="go" onclick="addTask()">Add Task</button>
+      <div id="t-list" style="margin-top:16px"></div>
+    </div>
+
+    <div class="panel" id="p-approvals">
+      <h2>✅ Approvals <span class="badge" id="a-count"></span></h2>
+      <div class="empty-note">Sab kuch tumhare approval ke baad hi hota hai. Approved items upload queue mein jate hain.</div>
+      <div id="a-list"></div>
+    </div>
+
+    <div class="panel" id="p-contacts">
+      <h2>📱 Contacts</h2>
+      <input class="field" id="c-name" placeholder="Name">
+      <input class="field" id="c-phone" placeholder="Phone (+923001234567)">
+      <input class="field" id="c-note" placeholder="Note (optional)">
+      <button class="go" onclick="addContact()">Save Contact</button>
+      <div id="c-list" style="margin-top:16px"></div>
+    </div>
+
+    <div class="panel" id="p-hunt">
+      <h2>🚀 Product Hunt</h2>
+      <select class="field" id="h-geo"><option>US</option><option>UK</option><option>PK</option><option>DE</option><option>CA</option><option>AU</option></select>
+      <input class="field" id="h-niche" placeholder="Niche (optional, e.g. cat shirts)">
+      <button class="go" onclick="hunt()">Hunt Products</button>
+      <div id="h-out" style="margin-top:16px"></div>
+    </div>
+
+    <div class="panel" id="p-buyers">
+      <h2>🔎 Find Buyers</h2>
+      <input class="field" id="b-niche" placeholder='Niche, e.g. "custom t-shirts"'>
+      <button class="go" onclick="buyers()">Find Buyers</button>
+      <div id="b-out" style="margin-top:16px"></div>
+    </div>
+
+    <div class="panel" id="p-rules">
+      <h2>📜 Rules <span class="pill">PERMANENT</span></h2>
+      <div class="empty-note">Rules kabhi remove nahi hoti — sirf add/update (owner ka order).</div>
+      <input class="field" id="r-new" placeholder="Naya rule likho">
+      <button class="go" onclick="addRule()">Add Rule</button>
+      <ul class="list" id="r-list" style="margin-top:14px"></ul>
+    </div>
+
+    <div class="panel" id="p-memory">
+      <h2>🧠 Memory</h2>
+      <textarea class="field" id="m-new" placeholder="Kya yaad rakhna hai?"></textarea>
+      <button class="go" onclick="addMemory()">Save Memory</button>
+      <ul class="list" id="m-list" style="margin-top:14px"></ul>
+    </div>
+
+    
+    <div class="panel" id="p-sim" style="display:none">
+      <h2>📱 SIM Dialer</h2>
+      <div class="empty-note">Default SIM select karo — Genius Bot isi se call karega (chat se override ho sakta hai).</div>
+      <button class="go" onclick="simSet(0)">SIM 1 default</button>
+      <button class="go" onclick="simSet(1)">SIM 2 default</button>
+      <button class="go" onclick="simSet(-1)">Har call pe poochho</button>
+      <button class="go" onclick="if(window.AutoBotNative)AutoBotNative.handleChatCommand('sim status')">Status refresh</button>
+      <div id="sim-out" style="margin-top:14px;font-size:14px;line-height:1.6;color:var(--muted)"></div>
+    </div>
+
+    <div class="panel" id="p-access">
+      <h2>♿ Accessibility</h2>
+      <div class="empty-note">Screen padhne + aage automation ke liye. Genius Bot khud on nahi kar sakta — aap ek baar allow karo, phir jo bhi task accessibility maangta hai main khud kar dunga.</div>
+      <div style="margin:12px 0;padding:12px;border-radius:12px" id="acc-status">⏳ Status check ho raha hai...</div>
+      <button class="go" onclick="openAccSettings()">Accessibility Settings kholo</button>
+      <div style="margin-top:16px;font-size:13px;color:var(--muted);line-height:1.7">
+        <b>On karne ke steps:</b><br>
+        1. Phone <b>Settings</b> kholo<br>
+        2. <b>Accessibility</b> tap karo<br>
+        3. <b>Genius Bot</b> dhoondo aur tap karo<br>
+        4. <b>On</b> kar ke Allow press karo<br><br>
+        <b>On hone ke baad ye hoga:</b><br>
+        • Chat mein "screen parho" — main har app ka text padh kar bata dunga<br>
+        • "tap <button ka naam>" — screen par koi bhi button khud dabana<br>
+        • "scroll down/up" — page khud scroll karna<br>
+        • "wapis jao" / "home jao" — back aur home button control<br>
+        • "chrome <site>" — Chrome mein direct site/search kholna<br>
+        • Jo tasks accessibility ke bina na ho saken, main chat mein khud bata dunga ke on karo
+      </div>
+    </div>
+
+    <div class="panel" id="p-history">
+      <h2>🗂️ Chat History</h2>
+      <div class="empty-note">Kisi bhi chat par tap karo — wahi se continue hoga. ✕ se delete.</div>
+      <div id="hist-list"></div>
+    </div>
+  </div>
+
+  <!-- INPUT BAR -->
+  <div id="inputbar">
+    <div id="mic-level" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+    <div id="inputbox">
+      <input type="file" id="file" style="display:none" onchange="filePick(this)">
+      <button class="ibtn" id="plus" onclick="document.getElementById('file').click()" title="Upload">+</button>
+      <textarea id="msg" rows="1" placeholder="Kuch bhi likho — koi sawal ya command"></textarea>
+      <div id="mic-wrap">
+        <div id="mic-rings"><span class="mic-ring"></span><span class="mic-ring r2"></span><span class="mic-ring r3"></span></div>
+        <button class="ibtn" id="mic" onclick="micToggle()" title="Voice input (offline)"><span class="mic-ico">🎤</span></button>
+      </div>
+      <button id="send" disabled onclick="send()" title="Send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+    </div>
+    <div id="disclaimer" style="display:none">Genius Bot mistakes kar sakta hai. Purchases hamesha owner approval ke baad.</div>
+  </div>
+</main>
+
+<script>
+const API = (location.protocol === 'file:') ? 'https://auto-bot-al-noor-stores-projects.vercel.app/api' : '/api';
+const LOGO_SVG = "<svg viewBox=\"0 0 200 200\" xmlns=\"http://www.w3.org/2000/svg\" style=\"width:100%;height:100%;display:block;overflow:visible\"><defs><linearGradient id=\"gbg\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop stop-color=\"#00eaff\"/><stop offset=\".52\" stop-color=\"#2875ff\"/><stop offset=\"1\" stop-color=\"#c044ff\"/></linearGradient><radialGradient id=\"gbcore\"><stop stop-color=\"#172c62\"/><stop offset=\"1\" stop-color=\"#070d20\"/></radialGradient><filter id=\"gbglow\" x=\"-80%\" y=\"-80%\" width=\"260%\" height=\"260%\"><feGaussianBlur stdDeviation=\"3\" result=\"blur\"/><feMerge><feMergeNode in=\"blur\"/><feMergeNode in=\"SourceGraphic\"/></feMerge></filter></defs><style>.gb-orbit{transform-origin:100px 100px;animation:gb-spin 9s linear infinite}.gb-orbit2{transform-origin:100px 100px;animation:gb-spin 6s linear infinite reverse}.gb-core{transform-origin:100px 100px;animation:gb-breathe 2.4s ease-in-out infinite}.gb-node{animation:gb-blink 1.8s ease-in-out infinite}.gb-node.n2{animation-delay:.6s}.gb-node.n3{animation-delay:1.2s}@keyframes gb-spin{to{transform:rotate(360deg)}}@keyframes gb-breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.035)}}@keyframes gb-blink{0%,100%{opacity:.4}50%{opacity:1}}</style><circle cx=\"100\" cy=\"100\" r=\"78\" fill=\"none\" stroke=\"url(#gbg)\" stroke-width=\"2\" opacity=\".3\"/><g class=\"gb-orbit\"><ellipse cx=\"100\" cy=\"100\" rx=\"83\" ry=\"31\" fill=\"none\" stroke=\"url(#gbg)\" stroke-width=\"3\" opacity=\".9\"/><circle class=\"gb-node\" cx=\"183\" cy=\"100\" r=\"5\" fill=\"#00f5ff\" filter=\"url(#gbglow)\"/></g><g class=\"gb-orbit2\"><ellipse cx=\"100\" cy=\"100\" rx=\"31\" ry=\"83\" fill=\"none\" stroke=\"url(#gbg)\" stroke-width=\"2\" opacity=\".65\"/><circle class=\"gb-node n2\" cx=\"100\" cy=\"17\" r=\"4\" fill=\"#cf55ff\" filter=\"url(#gbglow)\"/></g><g class=\"gb-core\"><path d=\"M100 37 151 66v68l-51 29-51-29V66Z\" fill=\"url(#gbcore)\" stroke=\"url(#gbg)\" stroke-width=\"4\" filter=\"url(#gbglow)\"/><path d=\"M69 80h-9v-9m71 0v9h9m-80 40h9v9m71 0v-9h-9\" fill=\"none\" stroke=\"#00eaff\" stroke-width=\"3\" stroke-linecap=\"round\"/><text x=\"100\" y=\"111\" font-family=\"Arial,sans-serif\" font-size=\"43\" font-weight=\"800\" text-anchor=\"middle\" fill=\"url(#gbg)\" stroke=\"#dffcff\" stroke-width=\".5\">GB</text><path d=\"M77 124h46\" stroke=\"#00eaff\" stroke-width=\"2\" stroke-linecap=\"round\" opacity=\".85\"/></g><circle class=\"gb-node n3\" cx=\"40\" cy=\"58\" r=\"3.5\" fill=\"#00eaff\"/><circle cx=\"160\" cy=\"143\" r=\"3.5\" fill=\"#bd4dff\"/></svg>";
+const $ = id => document.getElementById(id);
+let attached = null;
+let chatHist = [];
+try { chatHist = JSON.parse(localStorage.getItem('ab_chat') || '[]'); } catch(e) {}
+
+/* ---------- helpers ---------- */
+async function get(route) { const r = await fetch(API + '/' + route); return r.json(); }
+async function post(route, body) { const r = await fetch(API + '/' + route, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) }); return r.json(); }
+function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function saveChat() { localStorage.setItem('ab_chat', JSON.stringify(chatHist.slice(-60))); }
+function isMobile() { return window.innerWidth <= 768; }
+function toggleSidebar() {
+  if (!isMobile()) return;
+  $('sidebar').classList.toggle('open');
+  $('overlay').style.display = $('sidebar').classList.contains('open') ? 'block' : 'none';
+}
+
+/* ---------- views ---------- */
+function showView(v) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('show'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.view === v));
+  const isChat = v === 'chat';
+  $('chatwrap').style.display = isChat ? 'flex' : 'none';
+  $('inputbar').style.display = isChat ? 'block' : 'none';
+  if (!isChat) $('p-' + v).classList.add('show');
+  if (isMobile() && $('sidebar').classList.contains('open')) toggleSidebar();
+  if (v === 'tasks') loadTasks();
+  if (v === 'approvals') loadApprovals();
+  if (v === 'contacts') loadContacts();
+  if (v === 'rules') loadRules();
+  if (v === 'memory') loadMemory();
+  if (v === 'history') loadHistory();
+  if (v === 'access') loadAccess();
+}
+let curChat = null;
+function chatsAll() { try { return JSON.parse(localStorage.getItem('ab_chats') || '[]'); } catch (e) { return []; } }
+function chatsPut(a) { try { localStorage.setItem('ab_chats', JSON.stringify(a.slice(-50))); } catch (e) {} }
+function chatById(id) { return chatsAll().find(c => c.id === id); }
+function ensureChat(firstLine) {
+  if (curChat) { const c = chatById(curChat); if (c) return c; }
+  const title = String(firstLine || 'New chat').split('\n')[0].slice(0, 48).trim() || 'New chat';
+  const c = { id: Date.now(), title, updated: Date.now(), msgs: [] };
+  const a = chatsAll(); a.unshift(c); chatsPut(a);
+  curChat = c.id; localStorage.setItem('ab_last_chat', String(c.id));
+  return c;
+}
+function chatPush(u, b) {
+  chatHist.push({ u, b }); saveChat();
+  const c = curChat ? chatById(curChat) : null;
+  if (!c) return;
+  c.msgs.push({ u, b }); c.updated = Date.now();
+  const a = chatsAll(); const i = a.findIndex(x => x.id === c.id);
+  if (i >= 0) { a.splice(i, 1); a.unshift(c); chatsPut(a); }
+}
+function openChat(id) {
+  const c = chatById(id); if (!c) return;
+  curChat = id; localStorage.setItem('ab_last_chat', String(id));
+  $('msgs').innerHTML = '';
+  $('empty').style.display = c.msgs.length ? 'none' : 'flex';
+  c.msgs.forEach(m => { if (m.u) bubble('user', m.u); if (m.b) bubble('bot', m.b); });
+  showView('chat');
+  if (isMobile() && $('sidebar').classList.contains('open')) toggleSidebar();
+}
+function deleteChat(id) {
+  chatsPut(chatsAll().filter(c => c.id !== id));
+  if (curChat === id) { curChat = null; $('msgs').innerHTML = ''; $('empty').style.display = 'flex'; }
+  loadHistory();
+}
+function loadHistory() {
+  const el = $('hist-list'); const a = chatsAll();
+  el.innerHTML = '';
+  if (!a.length) { el.innerHTML = '<div class="empty-note">Abhi koi chat nahi. ✚ New chat se shuru karo.</div>'; return; }
+  a.forEach(c => {
+    const d = document.createElement('div'); d.className = 'hist-item';
+    d.onclick = e => { if (e.target.closest('.hist-del')) return; openChat(c.id); };
+    const dt = new Date(c.updated).toLocaleString();
+    d.innerHTML = '<div class="hist-main"><div class="hist-title">' + esc(c.title) + '</div><div class="hist-sub">' + c.msgs.length + ' messages · ' + dt + '</div></div><button class="hist-del" onclick="deleteChat(' + c.id + ')">&#10005;</button>';
+    el.appendChild(d);
+  });
+}
+function loadAccess() {
+  var el = $('acc-status'); if (!el) return;
+  try {
+    if (window.AutoBotNative && AutoBotNative.isAccessibilityOn) {
+      var on = AutoBotNative.isAccessibilityOn();
+      el.textContent = on ? '✅ Accessibility ON — Genius Bot screen padh sakta hai. Chat mein "screen parho" try karo.' : '❌ Accessibility OFF — neeche steps se on karo.';
+      el.style.background = on ? 'rgba(16,163,127,.15)' : 'rgba(239,65,70,.13)';
+    } else {
+      el.textContent = 'ℹ️ Accessibility sirf Android app mein kaam karta hai (ye browser preview hai).';
+      el.style.background = 'var(--panel)';
+    }
+  } catch (e) { el.textContent = 'ℹ️ Status nahi mila.'; }
+}
+function openAccSettings() {
+  try { if (window.AutoBotNative && AutoBotNative.openAccessibilitySettings) { AutoBotNative.openAccessibilitySettings(); return; } } catch (e) {}
+  toast('App mein: Settings → Accessibility → Genius Bot');
+}
+
+function newChat() { curChat = null; chatHist = []; saveChat(); $('msgs').innerHTML = ''; $('empty').style.display = 'flex'; showView('chat'); if (isMobile() && $('sidebar').classList.contains('open')) toggleSidebar(); }
+
+/* ---------- chat ---------- */
+function bubble(role, text) {
+  const d = document.createElement('div');
+  d.className = 'msg ' + role;
+  d.innerHTML = role === 'user'
+    ? '<div class="bcol"><div class="bubble">' + esc(text) + '</div><div class="copyrow"><button class="copybtn" onclick="copyBubble(this)">&#10697; Copy</button></div></div>'
+    : '<div class="bcol"><div class="bubble">' + esc(text) + '</div><div class="copyrow"><button class="copybtn" onclick="copyBubble(this)">&#10697; Copy</button></div></div>';
+  $('msgs').appendChild(d);
+  // Enter/send ke baad nayi line neeche visible + input bar clear zone
+  try {
+    d.scrollIntoView({ block: 'end', behavior: 'smooth' });
+    const v = $('view');
+    if (v) v.scrollTop = v.scrollHeight;
+    const bar = $('inputbar');
+    if (bar) bar.scrollIntoView({ block: 'end', behavior: 'smooth' });
+  } catch (e) {
+    $('view').scrollTop = $('view').scrollHeight;
+  }
+}
+function typing() {
+  var old = document.getElementById('typing'); if (old) old.remove();
+  const d = document.createElement('div');
+  d.className = 'msg bot thinking-row'; d.id = 'typing';
+  d.innerHTML = '<div class="bcol"><div class="bubble thinking-label"><span class="th-dots"><span></span><span></span><span></span></span><span class="th-text">Thinking…</span></div></div>';
+  $('msgs').appendChild(d);
+  $('view').scrollTop = $('view').scrollHeight;
+}
+function quick(btn) { $('msg').value = btn.textContent; send(); }
+async function send() {
+  const m = $('msg').value.trim();
+  if (!m) return;
+  let full = m;
+  if (attached) full += '\n[File attached: ' + attached + ']';
+  $('msg').value = ''; autoGrow(); attached = null;
+  $('empty').style.display = 'none';
+  bubble('user', full);
+  ensureChat(m);
+  setSend();
+  typing();
+  if (window.AutoBotNative) { window.__lastLocalMsg = m; if (AutoBotNative.handleChatCommand(m)) { return; } }
+  const d = await post('chat', { message: m, file: attached });
+  $('typing') && $('typing').remove();
+  const reply = d.reply || d.error || 'Hmm, no response.';
+  bubble('bot', reply);
+  chatPush(full, reply);
+}
+function setSend() { $('send').disabled = !$('msg').value.trim() && !attached; }
+let toastT = null;
+function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('show'), 1600); }
+function execCopy(t) {
+  const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta);
+  ta.select(); let ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+  ta.remove(); toast(ok ? '\u2713 Copied' : 'Copy fail');
+}
+function copyText(t) {
+  if (!t) { toast('Kuch copy karne ko nahi hai'); return; }
+  if (window.AutoBotNative && AutoBotNative.copyToClipboard) { AutoBotNative.copyToClipboard(t); return; }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(t).then(() => toast('\u2713 Copied')).catch(() => execCopy(t));
+  } else execCopy(t);
+}
+function copyBubble(btn) { const b = btn.closest('.bcol').querySelector('.bubble'); copyText(b.innerText); btn.textContent = '\u2713 Copied'; setTimeout(() => btn.textContent = '\u238B Copy', 1500); }
+function autoGrow() { const t = $('msg'); t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 160) + 'px'; }
+
+
+/* Offline/native mic animation helpers (called from Android) */
+window.setMicListening = function(on) {
+  window.__abVoiceOn = !!on;
+  var m = document.getElementById('mic');
+  var w = document.getElementById('mic-wrap');
+  var lv = document.getElementById('mic-level');
+  if (m) {
+    if (on) { m.classList.add('rec'); m.title = 'Sun raha hoon… band karne ke liye dabao'; }
+    else { m.classList.remove('rec'); m.title = 'Voice input (offline)'; }
+  }
+  if (w) { if (on) w.classList.add('rec'); else w.classList.remove('rec'); }
+  if (lv) {
+    if (on) lv.classList.add('on'); else { lv.classList.remove('on');
+      lv.querySelectorAll('span').forEach(function(s){ s.style.height = '4px'; });
+    }
+  }
+};
+window.setMicLevel = function(rms) {
+  var lv = document.getElementById('mic-level');
+  if (!lv || !lv.classList.contains('on')) return;
+  var bars = lv.querySelectorAll('span');
+  var n = typeof rms === 'number' ? rms : 0;
+  // rms ~0..10 typical; map to bar heights
+  var base = Math.max(0, Math.min(10, n));
+  bars.forEach(function(s, i) {
+    var mid = Math.abs(i - 3);
+    var h = 4 + base * (2.2 - mid * 0.25) * (0.6 + Math.random() * 0.4);
+    s.style.height = Math.min(18, Math.max(3, h)) + 'px';
+  });
+};
+
+/* mic (Web Speech API) */
+let rec = null, recOn = false;
+function micToggle() {
+  if (recOn && rec) { rec.stop(); return; }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { bubble('bot', 'Mic is browser mein support nahi — Chrome use karo ya type karo.'); return; }
+  rec = new SR();
+  rec.lang = 'ur-PK'; rec.interimResults = true; rec.continuous = false;
+  let base = $('msg').value;
+  rec.onstart = () => { recOn = true; if (window.setMicListening) setMicListening(true); else $('mic').classList.add('rec'); };
+  rec.onresult = e => {
+    let s = ''; for (const r of e.results) s += r[0].transcript;
+    $('msg').value = (base ? base + ' ' : '') + s; autoGrow(); setSend();
+  };
+  rec.onerror = e => { if (e.error === 'language-not-supported' && rec.lang === 'ur-PK') { rec.lang = 'en-US'; rec.start(); } };
+  rec.onend = () => { recOn = false; if (window.setMicListening) setMicListening(false); else $('mic').classList.remove('rec'); };
+  rec.start();
+}
+/* upload */
+function filePick(inp) {
+  if (!inp.files.length) return;
+  attached = inp.files[0].name + ' (' + Math.round(inp.files[0].size / 1024) + ' KB)';
+  const tag = document.createElement('div');
+  tag.className = 'att'; tag.id = 'att';
+  tag.innerHTML = '📎 ' + esc(attached) + ' <span style="cursor:pointer" onclick="attached=null;$(\'att\').remove();setSend()">✕</span>';
+  $('inputbox').insertBefore(tag, $('msg'));
+  setSend();
+}
+
+/* ---------- tasks ---------- */
+async function addTask() {
+  const type = $('t-type').value, geo = $('t-geo').value;
+  const d = await post('tasks', { type, schedule: 'daily', config: { geo } });
+  if (d.ok) { bubble('bot', 'Task add ho gaya: ' + type + ' (' + geo + ', daily) — main roz chalega.'); loadTasks(); }
+}
+async function loadTasks() {
+  const d = await get('tasks'); const el = $('t-list');
+  if (!d.tasks?.length) { el.innerHTML = '<div class="empty-note">Koi task nahi. Chat mein "task product hunt daily US" likho ya upar se add karo.</div>'; $('bdg-tasks').style.display = 'none'; return; }
+  const act = d.tasks.filter(t => t.active).length;
+  $('bdg-tasks').style.display = ''; $('bdg-tasks').textContent = act;
+  el.innerHTML = d.tasks.map(t => '<div class="card"><div class="row"><div><b>' + esc(t.type) + '</b> <span class="pill' + (t.active ? '' : ' off') + '">' + (t.active ? 'ACTIVE' : 'PAUSED') + '</span><div class="sub">' + esc(t.schedule) + ' · geo: ' + esc(t.config?.geo || '-') + '</div></div><div>' + (t.active ? '<button class="pbtn" onclick="taskAct(' + t.id + ',\'pause\')">Pause</button>' : '<button class="pbtn ok" onclick="taskAct(' + t.id + ',\'resume\')">Resume</button>') + ' <button class="pbtn no" onclick="taskAct(' + t.id + ',\'delete\')">Delete</button></div></div></div>').join('');
+}
+async function taskAct(id, action) { await post('tasks', { id, action }); loadTasks(); }
+
+/* ---------- approvals ---------- */
+async function loadApprovals() {
+  const d = await get('approvals'); const el = $('a-list');
+  const pend = (d.approvals || []).filter(a => a.status === 'pending');
+  $('a-count').textContent = pend.length;
+  $('bdg-appr').style.display = pend.length ? '' : 'none'; $('bdg-appr').textContent = pend.length;
+  if (!d.approvals?.length) { el.innerHTML = '<div class="empty-note">Abhi koi approval nahi. Product hunt task chalao — mila to yahan aayega.</div>'; return; }
+  el.innerHTML = d.approvals.slice(-20).reverse().map(a => {
+    const det = a.detail?.trends ? '<div class="sub">' + esc(a.detail.trends.slice(0, 6).join(' · ')) + '</div>' : '';
+    const btns = a.status === 'pending' ? '<div style="margin-top:10px"><button class="pbtn ok" onclick="decide(' + a.id + ',\'approve\')">✓ Approve</button> <button class="pbtn no" onclick="decide(' + a.id + ',\'reject\')">✕ Reject</button></div>' : '<span class="pill' + (a.status === 'approved' ? '' : ' off') + '">' + a.status.toUpperCase() + '</span>';
+    return '<div class="card"><div class="row"><div><b>' + esc(a.title || a.type) + '</b>' + det + '</div>' + btns + '</div></div>';
+  }).join('');
+}
+async function decide(id, decision) { const d = await post('approvals', { id, decision }); if (d.ok && d.next) bubble('bot', d.next); loadApprovals(); }
+
+/* ---------- contacts ---------- */
+async function addContact() {
+  const name = $('c-name').value.trim(), phone = $('c-phone').value.trim(), note = $('c-note').value.trim();
+  if (!name || !phone) { alert('Naam aur number dono chahiye'); return; }
+  const d = await post('contacts', { name, phone, note });
+  if (d.ok) { $('c-name').value = $('c-phone').value = $('c-note').value = ''; loadContacts(); }
+  else alert(d.error || 'Error');
+}
+async function loadContacts() {
+  const d = await get('contacts'); const el = $('c-list');
+  if (!d.contacts?.length) { el.innerHTML = '<div class="empty-note">Koi contact nahi. Chat mein "contact Ali 03001234567" likho.</div>'; return; }
+  el.innerHTML = d.contacts.map(c => '<div class="card"><div class="row"><div><b>' + esc(c.name) + '</b><div class="sub">' + esc(c.phone) + (c.note ? ' · ' + esc(c.note) : '') + '</div></div><div>' + (window.AutoBotNative ? '<button class="pbtn ok" onclick="AutoBotNative.saveToPhoneBook(\'' + esc(c.name) + '\', \'' + esc(c.phone) + '\')">💾 Phone</button> <button class="pbtn" onclick="AutoBotNative.callNumber(\'' + esc(c.phone) + '\')">📞 Call</button> ' : '<a href="tel:' + encodeURIComponent(c.phone) + '"><button class="pbtn">📞 Call</button></a> ') + '<a target="_blank" href="https://wa.me/' + encodeURIComponent(c.phone.replace(/[^0-9]/g, '')) + '"><button class="pbtn ok">💬 WhatsApp</button></a> <button class="pbtn no" onclick="delContact(' + c.id + ')">✕</button></div></div></div>').join('');
+}
+async function delContact(id) { await post('contacts', { id, action: 'delete' }); loadContacts(); }
+
+/* ---------- hunt / buyers ---------- */
+async function hunt() {
+  const out = $('h-out'); out.innerHTML = '<div class="empty-note">Hunting...</div>';
+  const d = await post('product-hunt', { geo: $('h-geo').value, niche: $('h-niche').value.trim() });
+  if (!d.ok) { out.innerHTML = '<div class="empty-note">' + esc(d.error || 'Fail') + '</div>'; return; }
+  let h = '<div class="card"><b>🔥 ' + d.geo + ' Trends</b><ul class="list">' + (d.trending || []).map(t => '<li>' + esc(t) + '</li>').join('') + '</ul></div>';
+  if (d.product_ideas?.length) h += '<div class="card"><b>💡 AI Product Ideas</b><ul class="list">' + d.product_ideas.map(i => '<li><b>' + esc(i.product) + '</b> — ' + esc(i.why) + '</li>').join('') + '</ul></div>';
+  if (d.note) h += '<div class="empty-note">' + esc(d.note) + '</div>';
+  out.innerHTML = h;
+}
+async function buyers() {
+  const niche = $('b-niche').value.trim();
+  if (!niche) { alert('Niche likho'); return; }
+  const out = $('b-out'); out.innerHTML = '<div class="empty-note">Searching buyers...</div>';
+  const d = await post('find-buyers', { niche });
+  if (!d.ok) { out.innerHTML = '<div class="empty-note">' + esc(d.error || 'Fail') + '</div>'; return; }
+  let h = (d.buyer_places || []).map(b => '<div class="card"><b>' + esc(b.title) + '</b><div class="sub"><a class="lnk" target="_blank" href="' + esc(b.url) + '">' + esc(b.url) + '</a></div></div>').join('');
+  if (!h) h = '<div class="empty-note">Is niche ke buyers abhi nahi mile — niche change kar ke try karo.</div>';
+  h += '<div class="card"><b>Tips</b><ul class="list">' + (d.tips || []).map(t => '<li>' + esc(t) + '</li>').join('') + '</ul></div>';
+  out.innerHTML = h;
+}
+
+/* ---------- rules / memory ---------- */
+async function addRule() {
+  const r = $('r-new').value.trim(); if (!r) return;
+  const d = await post('rules', { rule: r });
+  if (d.ok) { $('r-new').value = ''; loadRules(); }
+}
+async function loadRules() {
+  const d = await get('rules');
+  $('r-list').innerHTML = (d.rules || []).map((r, i) => '<li>' + (i + 1) + '. ' + esc(r) + '</li>').join('') || '<li class="empty-note">Koi rule nahi.</li>';
+}
+async function addMemory() {
+  const t = $('m-new').value.trim(); if (!t) return;
+  const d = await post('memory', { text: t });
+  if (d.ok) { $('m-new').value = ''; loadMemory(); }
+}
+async function loadMemory() {
+  const d = await get('memory');
+  $('m-list').innerHTML = (d.memories || []).slice(-30).reverse().map(m => '<li>' + esc(m.text) + '</li>').join('') || '<li class="empty-note">Kuch yaad nahi rakha.</li>';
+}
+
+/* ---------- theme ---------- */
+function toggleTheme() {
+  const light = document.body.classList.toggle('light');
+  localStorage.setItem('ab_theme', light ? 'light' : 'dark');
+  $('theme-ico').textContent = light ? '🌙' : '☀️';
+  $('theme-label').textContent = light ? 'Dark mode' : 'Light mode';
+}
+if (localStorage.getItem('ab_theme') === 'dark') {
+  document.body.classList.remove('light');
+  const ic = document.getElementById('theme-ico'), lb = document.getElementById('theme-label');
+  if (ic) ic.textContent = '☀️'; if (lb) lb.textContent = 'Light mode';
+}
+
+document.querySelectorAll('.logo-slot').forEach(el => el.innerHTML = LOGO_SVG);
+
+/* ---------- init ---------- */
+$('msg').addEventListener('input', () => { setSend(); autoGrow(); });
+$('msg').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    send();
+    // prompt bhejne ke baad input clear + view neeche, typing line dikhe
+    requestAnimationFrame(() => {
+      try {
+        const v = $('view'); if (v) v.scrollTop = v.scrollHeight;
+        const m = $('msg'); if (m) { m.focus(); autoGrow(); }
+        const bar = $('inputbar'); if (bar) bar.scrollIntoView({ block: 'end' });
+      } catch (err) {}
+    });
+  }
+});
+(function restoreChats() {
+  let all = chatsAll();
+  if (!all.length && chatHist.length) {
+    const first = chatHist.find(m => m.u);
+    const c = { id: Date.now(), title: (first ? String(first.u).split('\n')[0].slice(0, 48).trim() : 'Purani chat'), updated: Date.now(), msgs: chatHist.slice() };
+    chatsPut([c]); all = [c];
+  }
+  const lastId = parseInt(localStorage.getItem('ab_last_chat') || '0');
+  if (lastId && all.some(c => c.id === lastId)) {
+    const keep = $('view').scrollTop; // no-op guard
+    openChat(lastId);
+    $('view').scrollTop = 0;
+  }
+})();
+(async () => {
+  try {
+    const d = await get('status');
+    if (d.pending_approvals) { $('bdg-appr').style.display = ''; $('bdg-appr').textContent = d.pending_approvals; }
+  } catch (e) {}
+})();
+</script>
+<script>
+  window.__localBotReply = function (t) {
+    var tp = document.getElementById('typing'); if (tp) tp.remove();
+    var s = (t || '').trim();
+    // Thinking / Soch raha — kabhi permanent message mat banao
+    if (/Soch raha/i.test(s) || /^thinking\.?\.?\.?$/i.test(s) || s === '…' || s === '...') {
+      if (typeof typing === 'function') typing();
+      return;
+    }
+    // progress-only lines (model loading) — thinking label update, no bubble
+    if (/^(📦|💡|⚪|✅ Model)/.test(s) && s.length < 120) {
+      var el = document.querySelector('#typing .th-text');
+      if (el) { el.textContent = s.replace(/^[📦💡⚪✅]\s*/, '').slice(0, 60); return; }
+      if (typeof typing === 'function') typing();
+      return;
+    }
+    bubble('bot', t);
+    if (window.__lastLocalMsg) ensureChat(window.__lastLocalMsg);
+    chatPush(window.__lastLocalMsg || '', t);
+  };
+  /* v2.6 offline brain: buttons wala reply (call/end-call/whatsapp buttons chat mein) */
+  window.__localBotReplyEx = function (t, btns) {
+    $('typing') && $('typing').remove();
+    var d = document.createElement('div');
+    d.className = 'msg bot';
+    var html = '<div class="bcol"><div class="bubble">' + esc(t);
+    (btns || []).forEach(function (b) {
+      var col = (b.action === 'endcall') ? '#ef4146' : '#10a37f';
+      html += '<div style="margin-top:8px"><button style="background:' + col + ';color:#fff;border:none;border-radius:20px;padding:9px 18px;font-size:14px;font-weight:600;cursor:pointer" onclick="abBtn(this)" data-action="' + esc(b.action) + '" data-phone="' + esc(b.phone || '') + '">' + esc(b.label) + '</button></div>';
+    });
+    html += '</div><div class="copyrow"><button class="copybtn" onclick="copyBubble(this)">&#10697; Copy</button></div></div>';
+    d.innerHTML = html;
+    $('msgs').appendChild(d);
+    $('view').scrollTop = $('view').scrollHeight;
+    if (window.__lastLocalMsg) ensureChat(window.__lastLocalMsg);
+    chatPush(window.__lastLocalMsg || '', t);
+  };
+  window.simSet = function (slot) {
+    if (!window.AutoBotNative) return;
+    var cmd = slot === 0 ? 'sim 1 default' : (slot === 1 ? 'sim 2 default' : 'sim ask');
+    AutoBotNative.handleChatCommand(cmd);
+    showView('chat');
+  };
+  window.abBtn = function (el) {
+    if (!window.AutoBotNative) return;
+    var a = el.getAttribute('data-action'), ph = el.getAttribute('data-phone');
+    if (a === 'call') AutoBotNative.callNumber(ph);
+    else if (a === 'endcall') AutoBotNative.endCall();
+    else if (a === 'wa') AutoBotNative.openWhatsApp(ph);
+    else if (a === 'dlfile' && AutoBotNative.openLocalFile) AutoBotNative.openLocalFile(ph);
+    else if (a === 'simcall' && AutoBotNative.simCall) AutoBotNative.simCall(ph);
+    else if (a === 'simcancel' && AutoBotNative.handleChatCommand) AutoBotNative.handleChatCommand('cancel');
+    else if (a === 'simset' && AutoBotNative.handleChatCommand) AutoBotNative.handleChatCommand(ph);
+    else if (a === 'wacall' && AutoBotNative.handleChatCommand) AutoBotNative.handleChatCommand(ph);
+    else if (a === 'dlmodel' && AutoBotNative.downloadModel) AutoBotNative.downloadModel(ph);
+      else if (a === 'dlvoice' && AutoBotNative.downloadVoiceModel) AutoBotNative.downloadVoiceModel(ph);
+    el.disabled = true; el.style.opacity = '0.5';
+  };
+  if (window.AutoBotNative) {
+    try { if (AutoBotNative.getAppVersion) { var _v = AutoBotNative.getAppVersion(); if (_v) $('app-ver').textContent = 'v' + _v.replace('-LITE','').replace('-PRO',''); } } catch (e) {}
+    // Native mode banner ab hidden (feature phir bhi active hai, sirf visual notice nahi dikhta)
+    document.body.insertAdjacentHTML('afterbegin', '<div style="display:none;background:#0ea5b7;color:#04222a;padding:6px 14px;font-size:12px;font-weight:600;text-align:center">📱 Native mode ON — contacts phone mein save honge</div>');
+    var mo = document.getElementById('sidebar');
+    if (mo) mo.insertAdjacentHTML('beforeend', '<button class="nav-item" onclick="AutoBotNative.openTerminal()"><span class="nav-ico">🖥️</span> Terminal</button><button class="nav-item" onclick="AutoBotNative.openNativePanel()"><span class="nav-ico">⚡</span> Native Powers</button><button class="nav-item" onclick="AutoBotNative.openSimDialer && AutoBotNative.openSimDialer()"><span class="nav-ico">📱</span> SIM Dialer</button><button class="nav-item" onclick="AutoBotNative.openSettings()"><span class="nav-ico">⚙️</span> Settings</button>');
+  }
+  // Purchase disclaimer ab static bar nahi — sirf jab purchase-related baat chal rahi ho tab chat mein reminder
+  (function () {
+    var _msgs = document.getElementById('msgs');
+    var _lastWarn = 0;
+    var _rx = /\b(buy|purchase|order|kharid|khareed|checkout|payment|pay\s*now)\b/i;
+    function _maybeWarn(text) {
+      if (!text || !_rx.test(text)) return;
+      var now = Date.now();
+      if (now - _lastWarn < 15000) return;
+      _lastWarn = now;
+      if (!_msgs) return;
+      var d = document.createElement('div');
+      d.className = 'msg bot';
+      d.innerHTML = '<div class="bubble" style="color:var(--muted);font-size:13px">⚠️ Purchases hamesha owner approval ke baad hoti hain.</div>';
+      _msgs.appendChild(d);
+      d.scrollIntoView({ block: 'end' });
+    }
+    if (_msgs) {
+      new MutationObserver(function (muts) {
+        muts.forEach(function (m) {
+          m.addedNodes.forEach(function (n) { if (n.nodeType === 1) _maybeWarn(n.textContent || ''); });
+        });
+      }).observe(_msgs, { childList: true });
+    }
+  })();
+  // AutoBotNative cross-session history sync (online <-> offline dono ek hi chat history)
+  (function () {
+    if (!window.AutoBotNative) return;
+    try {
+      var origSetItem = localStorage.setItem.bind(localStorage);
+      localStorage.setItem = function (k, v) {
+        origSetItem(k, v);
+        if (k === 'ab_chat') { try { AutoBotNative.syncHistory(v); } catch (e) {} }
+      };
+      if (!sessionStorage.getItem('ab_hydrated')) {
+        sessionStorage.setItem('ab_hydrated', '1');
+        var mineRaw = localStorage.getItem('ab_chat');
+        var mineArr = mineRaw ? JSON.parse(mineRaw) : [];
+        if (mineArr.length === 0) {
+          var sharedRaw = AutoBotNative.getSharedHistory();
+          var sharedArr = sharedRaw ? JSON.parse(sharedRaw) : [];
+          if (sharedArr.length > 0) { localStorage.setItem('ab_chat', JSON.stringify(sharedArr)); location.reload(); }
+        }
+      }
+    } catch (e) {}
+  })();
+</script>
+</body>
+</html>

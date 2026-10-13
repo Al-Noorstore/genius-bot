@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Genius Bot</string>
+    <string name="app_label">Genius Bot</string>
+    <string name="accessibility_desc">Genius Bot ko screen ka text padhne aur automation tasks karne ke liye access deta hai. Sirf aap ke kehne par kaam karta hai.</string>
+</resources>
