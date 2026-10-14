@@ -837,10 +837,11 @@ class MainActivity : AppCompatActivity() {
         Thread {
             Thread.sleep(2500)
             var sent = false
-            repeat(8) {
+            var tries = 0
+            while (!sent && tries < 8) {
+                tries++
                 val r = try { AutoBotAccessibilityService.tapWhatsAppSendConfirmed() } catch (_: Exception) { "OFF" }
-                if (r == "OK") { sent = true; return@repeat }
-                Thread.sleep(1500)
+                if (r == "OK") sent = true else Thread.sleep(1500)
             }
             runOnUiThread {
                 chatReply(if (sent) "✅ $label — Send button khud dabaya gaya. Message chala gaya (delivery WhatsApp mein check karein)."
