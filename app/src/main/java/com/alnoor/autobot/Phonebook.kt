@@ -15,18 +15,22 @@ object Phonebook {
     fun insertContact(ctx: Context, name: String, phone: String): Boolean {
         try {
             if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.WRITE_CONTACTS) != PackageManager.PERMISSION_GRANTED) return false
-            val ops = arrayListOf<android.content.ContentProviderOperation>()
-            ops += android.content.ContentProviderOperation.newInsert(android.provider.ContactsContract.RawContacts.CONTENT_URI)
-                .withValue(android.provider.ContactsContract.RawContacts.ACCOUNT_TYPE, null)
-                .withValue(android.provider.ContactsContract.RawContacts.ACCOUNT_NAME, null).build()
-            ops += android.content.ContentProviderOperation.newInsert(android.provider.ContactsContract.CommonDataKinds.StructuredName.CONTENT_URI)
-                .withValueBackReference(android.provider.ContactsContract.CommonDataKinds.StructuredName.RAW_CONTACT_ID, 0)
-                .withValue(android.provider.ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, name).build()
-            ops += android.content.ContentProviderOperation.newInsert(android.provider.ContactsContract.CommonDataKinds.Phone.CONTENT_URI)
-                .withValueBackReference(android.provider.ContactsContract.CommonDataKinds.Phone.RAW_CONTACT_ID, 0)
-                .withValue(android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER, phone)
-                .withValue(android.provider.ContactsContract.CommonDataKinds.Phone.TYPE, android.provider.ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE).build()
-            ctx.contentResolver.applyBatch(android.provider.ContactsContract.AUTHORITY, ops)
+            val cr = ctx.contentResolver
+            val rawUri = cr.insert(ContactsContract.RawContacts.CONTENT_URI, android.content.ContentValues()) ?: return false
+            val rawId = ContactsContract.RawContacts::class.let { android.content.ContentUris.parseId(rawUri) }
+            val cvName = android.content.ContentValues().apply {
+                put(ContactsContract.Data.RAW_CONTACT_ID, rawId)
+                put(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE)
+                put(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, name)
+            }
+            cr.insert(ContactsContract.Data.CONTENT_URI, cvName)
+            val cvPhone = android.content.ContentValues().apply {
+                put(ContactsContract.Data.RAW_CONTACT_ID, rawId)
+                put(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE)
+                put(ContactsContract.CommonDataKinds.Phone.NUMBER, phone)
+                put(ContactsContract.CommonDataKinds.Phone.TYPE, ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE)
+            }
+            cr.insert(ContactsContract.Data.CONTENT_URI, cvPhone)
             return true
         } catch (_: Exception) { return false }
     }
