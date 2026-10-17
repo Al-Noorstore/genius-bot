@@ -766,22 +766,25 @@ class MainActivity : AppCompatActivity() {
             var number = ""
             if (digits.length >= 7 && q.replace(Regex("[+0-9()\\s-]"), "").isBlank()) number = q
             else {
-                if (!Phonebook.hasPermission(this)) {
-                    chatReply("Contacts permission chahiye taake $q ka sahi number mil sake. Android Settings mein Genius Bot → Permissions → Contacts allow karo.")
-                    clear(); return true
+                // v4.22: RelationEngine — saved relations (abu/bhai/dost) pehle, phir phonebook
+                val res = RelationEngine.resolve(this, q)
+                when (res) {
+                    is RelationEngine.Res.Direct -> { resolvedName = res.number; number = res.number }
+                    is RelationEngine.Res.Single -> { resolvedName = res.label; number = res.number }
+                    is RelationEngine.Res.Ambiguous -> {
+                        stage = "recipient"; save()
+                        chatReply("Kai contacts milay:\n" + res.options.mapIndexed { i, o -> "${i + 1}. ${o.first} — ${o.second}" }.joinToString("\n") + "\nExact naam ya list ka number batao.")
+                        return true
+                    }
+                    RelationEngine.Res.NotFound -> {
+                        if (!Phonebook.hasPermission(this)) {
+                            chatReply("Contacts permission chahiye taake $q ka sahi number mil sake. Android Settings mein Genius Bot → Permissions → Contacts allow karo.")
+                        } else {
+                            chatReply("'$q' nahi mila — na saved relations mein na phone contacts mein.\n'save $q 03001234567' se add karo, ya number seedha batao.")
+                        }
+                        clear(); return true
+                    }
                 }
-                val matches = Phonebook.findByName(this, q, 5)
-                if (matches.isEmpty()) {
-                    chatReply("Phone contacts mein '$q' nahi mila. Saved naam/number dobara batao, ya 'save name number' se contact add karo.")
-                    clear(); return true
-                }
-                if (matches.size > 1 && matches.none { it.name.equals(q, true) }) {
-                    stage = "recipient"; save()
-                    chatReply("Kai contacts milay: " + matches.mapIndexed { i, c -> "${i + 1}. ${c.name} — ${c.number}" }.joinToString("\n") + "\nExact naam ya list ka number batao.")
-                    return true
-                }
-                val match = matches.firstOrNull { it.name.equals(q, true) } ?: matches.first()
-                resolvedName = match.name; number = match.number
             }
             clear()
             when (kind) {
@@ -2140,6 +2143,10 @@ Aur dekhna ho to: `help`""")
                 wantAuto -> { getSharedPreferences("autobot", Context.MODE_PRIVATE).edit().putString("ai_route", "auto").apply(); chatReply("🤖 Auto mode ON — API key ho to API, warna offline Qwen, warna dono try karunga."); return true }
             }
         }
+        // ---------- v4.22: TASKS (scheduled call/WhatsApp) + BROADCAST (sab ko bhejo) ----------
+        TaskEngine.consumeChoice(this, low)?.let { chatReply(it); return true }
+        TaskEngine.handleCommand(this, low)?.let { chatReply(it); return true }
+        if (BroadcastEngine.handle(this, msg, { m -> runOnUiThread { chatReply(m) } })) return true
         // ---------- SMART COMMUNICATION FOLLOW-UP: deterministic in BOTH offline and GGUF/API routes ----------
         if (handleSmartCommunicationFlow(msg)) return true
         // ---------- OFFLINE BRAIN (v2.6): bina API key / bina model ke bhi ye commands chalete hain ----------

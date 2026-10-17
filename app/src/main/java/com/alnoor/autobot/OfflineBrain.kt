@@ -260,12 +260,15 @@ object OfflineBrain {
         prefs(ctx).edit().putString("brain_contacts", arr.toString()).apply()
     }
 
-    private fun storeContact(ctx: Context, c: BrainContact) {
+    private fun storeContact(ctx: Context, c: BrainContact): Boolean {
         val list = loadContacts(ctx)
         val tail = c.phone.replace(Regex("[^\\d]"), "").takeLast(8)
         list.removeAll { it.phone.replace(Regex("[^\\d]"), "").takeLast(8) == tail }
         list.add(c)
         saveContacts(ctx, list)
+        // v4.22: phone book mein bhi save (agar WRITE_CONTACTS permission ho)
+        try { return Phonebook.insertContact(ctx, c.name, c.phone) } catch (_: Exception) {}
+        return false
     }
 
     // ---------- recycle bin (deleted contacts) ----------
@@ -908,9 +911,10 @@ object OfflineBrain {
                 return r
             }
             val relTxt = if (rel != null) " | Relation: $rel" else " | Relation: (optional — bataya nahi)"
-            r.text = "✅ Contact save ho gaya!\n👤 $name — ${normalizePhone(phone)}$relTxt\nAb \"${if (rel != null) rel + " " else ""}$name ko call karo\" bolo to call laga dunga."
+            val phoneSaved = storeContact(ctx, BrainContact(name, normalizePhone(phone), rel))
+            r.text = "✅ Contact save ho gaya!\n👤 $name — ${normalizePhone(phone)}$relTxt\nAb \"${if (rel != null) rel + " " else ""}$name ko call karo\" bolo to call laga dunga." +
+                (if (phoneSaved) "\n📱 Phone contacts mein bhi save ho gaya — har jagah dikh jayega." else "\nℹ️ App-memory mein save hua. Phone book mein bhi karne ke liye: Settings → Apps → Genius Bot → Permissions → Contacts → Allow + Add/Modify.")
             r.actions.add(BrainAction("phonebook", name, normalizePhone(phone)))
-            storeContact(ctx, BrainContact(name, normalizePhone(phone), rel))
             return r
         }
 

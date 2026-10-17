@@ -1,5 +1,6 @@
 package com.alnoor.autobot
 
+import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.provider.ContactsContract
@@ -9,6 +10,26 @@ import androidx.core.content.ContextCompat
 object Phonebook {
 
     data class Entry(val name: String, val number: String)
+
+    /** v4.22: contact ko ANDROID PHONE BOOK mein bhi save karta hai (WRITE_CONTACTS permission ke sath). */
+    fun insertContact(ctx: Context, name: String, phone: String): Boolean {
+        try {
+            if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.WRITE_CONTACTS) != PackageManager.PERMISSION_GRANTED) return false
+            val ops = arrayListOf<android.content.ContentProviderOperation>()
+            ops += android.content.ContentProviderOperation.newInsert(android.provider.ContactsContract.RawContacts.CONTENT_URI)
+                .withValue(android.provider.ContactsContract.RawContacts.ACCOUNT_TYPE, null)
+                .withValue(android.provider.ContactsContract.RawContacts.ACCOUNT_NAME, null).build()
+            ops += android.content.ContentProviderOperation.newInsert(android.provider.ContactsContract.CommonDataKinds.StructuredName.CONTENT_URI)
+                .withValueBackReference(android.provider.ContactsContract.CommonDataKinds.StructuredName.RAW_CONTACT_ID, 0)
+                .withValue(android.provider.ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, name).build()
+            ops += android.content.ContentProviderOperation.newInsert(android.provider.ContactsContract.CommonDataKinds.Phone.CONTENT_URI)
+                .withValueBackReference(android.provider.ContactsContract.CommonDataKinds.Phone.RAW_CONTACT_ID, 0)
+                .withValue(android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER, phone)
+                .withValue(android.provider.ContactsContract.CommonDataKinds.Phone.TYPE, android.provider.ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE).build()
+            ctx.contentResolver.applyBatch(android.provider.ContactsContract.AUTHORITY, ops)
+            return true
+        } catch (_: Exception) { return false }
+    }
 
     fun hasPermission(ctx: Context): Boolean =
         ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.READ_CONTACTS) ==

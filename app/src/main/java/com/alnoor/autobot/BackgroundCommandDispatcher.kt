@@ -95,6 +95,8 @@ object BackgroundCommandDispatcher {
     /** Commands that must work even while the chat Activity is already open. */
     fun dispatchPriority(ctx: Context, raw: String, report: (String) -> Unit): Boolean {
         val cmd = raw.trim().removePrefix("kaam karo ").removePrefix("phone agent ").trim()
+        TaskEngine.consumeChoice(ctx, cmd)?.let { report(it); return true }
+        TaskEngine.handleCommand(ctx, cmd)?.let { report(it); return true }
         val reminder = ReminderEngine.handleCommand(ctx, cmd)
         if (reminder != null) { report(reminder); return true }
         if (handleWhatsAppCall(ctx, cmd.lowercase(Locale.ROOT), report)) return true
@@ -110,25 +112,22 @@ object BackgroundCommandDispatcher {
             ?: return false
         val target = (match.groupValues.getOrNull(1).orEmpty()).trim().trim('.', '!', '?')
         if (target.isBlank()) { report("Kis ko call karna hai? Naam ya phone number batao."); return true }
-        val digitsOnly = target.filter { it.isDigit() }
-        val isNumber = digitsOnly.length >= 7 && target.replace(Regex("[+0-9()\\s-]"), "").isBlank()
-        val contact = if (isNumber) null else {
-            if (!Phonebook.hasPermission(ctx)) {
-                report("Saved contact dhoondhne ke liye Genius Bot ko Contacts permission dein, phir 'call to Abu' dobara bolein.")
+        // v4.22: RelationEngine — saved relations (abu/bhai/dost) pehle, phir phonebook exact naam
+        val res = RelationEngine.resolve(ctx, target)
+        val (phone, label) = when (res) {
+            is RelationEngine.Res.Direct -> res.number to res.number
+            is RelationEngine.Res.Single -> res.number to "${res.label} (${res.number})"
+            is RelationEngine.Res.Ambiguous -> {
+                report("Kai milay — exact naam ya number bolo:\n" + res.options.mapIndexed { i, o -> "${i + 1}. ${o.first} — ${o.second}" }.joinToString("\n"))
                 return true
             }
-            val found = Phonebook.findByName(ctx, target, 5)
-            if (found.isEmpty()) { report("'$target' saved contacts mein nahi mila. Exact naam ya number batao."); return true }
-            if (found.size > 1 && found.none { it.name.equals(target, true) }) {
-                report("Kai contacts milay: " + found.joinToString { it.name } + ". Exact naam ya phone number batao.")
+            RelationEngine.Res.NotFound -> {
+                report("'$target' nahi mila — na saved relations mein na phone contacts mein.\n'call <number>' bolo ya pehle save karo: save $target 03001234567")
                 return true
             }
-            found.firstOrNull { it.name.equals(target, true) } ?: found.first()
         }
-        val phone = contact?.number ?: target
         val sim = SimDialer.parseSimFromText(text)
         val result = SimDialer.placeCall(ctx, phone, sim)
-        val label = contact?.let { "${it.name} (${it.number})" } ?: phone
         report("$result\nContact/number: $label")
         return true
     }

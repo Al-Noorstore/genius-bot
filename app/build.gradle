@@ -20,8 +20,8 @@ android {
         applicationId isLite ? "com.alnoor.geniusbot" : "com.alnoor.geniusbot.pro"
         minSdk 24
         targetSdk 34
-        versionCode 61
-        versionName isLite ? "4.21-LITE" : "4.21-PRO"
+        versionCode 62
+        versionName isLite ? "4.22-LITE" : "4.22-PRO"
         ndk { abiFilters 'arm64-v8a', 'armeabi-v7a' }
         resValue "string", "app_label", "Genius Bot"
 

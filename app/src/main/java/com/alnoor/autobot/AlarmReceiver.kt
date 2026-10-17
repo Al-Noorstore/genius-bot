@@ -60,6 +60,7 @@ class BootReceiver : BroadcastReceiver() {
         if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
             AlarmEngine.rescheduleAll(ctx)
             ReminderEngine.rescheduleAll(ctx)
+            TaskEngine.rescheduleAll(ctx)
         }
     }
 }
