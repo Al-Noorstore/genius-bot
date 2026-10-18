@@ -1299,6 +1299,8 @@ class MainActivity : AppCompatActivity() {
         // v3.7: STARTUP PRELOAD — GGUF model background mein ready ho jata hai,
         // tak ke pehla sawal 2-3 min ki silence ke bajaye foran jawab de (LITE par silently skip)
         Thread { try { GgufEngine.prepare(this) { } } catch (_: Throwable) {} }.start()
+        // v4.23: bundled Vosk voice model (urdu-hindi) — pehli launch par background install (offline voice out-of-the-box)
+        Thread { try { SpeechEngine.installBundled(this) } catch (_: Throwable) {} }.start()
         // SAB SE PEHLE: pichle crash ka log dikha do (app crash ho to bhi next launch pe yahan aayenge)
         try {
             val lf = File(getExternalFilesDir(null), "crash_log.txt")

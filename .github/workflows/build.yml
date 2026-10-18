@@ -28,6 +28,14 @@ jobs:
           git clone --depth 1 --branch v0.5.0 https://github.com/ggml-org/llama.cpp app/src/main/cpp/llama.cpp
           echo "llama.cpp $(git -C app/src/main/cpp/llama.cpp describe --tags) ready"
 
+      # v4.23: Vosk Urdu-Hindi voice model — LITE+PRO dono mein bundled (voice out-of-the-box, no download)
+      - name: Bundle Vosk voice model (urdu-hindi)
+        run: |
+          mkdir -p app/src/main/assets/voice
+          curl -L --fail --retry 3 -o app/src/main/assets/voice/vosk-model-small-hi-0.22.zip \
+            https://alphacephei.com/vosk/models/vosk-model-small-hi-0.22.zip
+          ls -la app/src/main/assets/voice/
+
       # SmolLM2-135M Q4 (~105MB) — LITE + PRO dono mein bundled (chhote phones support)
       - name: Bundle SmolLM2-135M (main assets — all APKs)
         run: |

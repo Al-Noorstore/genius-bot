@@ -57,7 +57,7 @@ object SpeechEngine {
         val sb = StringBuilder()
         sb.append("🎤 OFFLINE VOICE (bina internet mic)\n\n")
         if (dl.isEmpty()) {
-            sb.append("Abhi koi voice model download nahi hai. Ek baar download karo (sirf ~40MB), phir hamesha offline chalega:\n")
+            sb.append("Voice model abhi install nahi hua.\n• Urdu-Hindi model APK ke ANDAR bundled hai — pehla mic dabao to khud install ho jayega (ya likho: voice download urdu-hindi)\n• English ke liye ek baar download karo (~40MB), phir hamesha offline:\n")
             for (m in MODELS) sb.append("• ${m.name} — ${m.display} (${m.size})\n")
             sb.append("\nChat mein likho: \"voice download urdu-hindi\"\n(English commands ke liye: \"voice download english\")\n\n⚠️ Download ke liye internet chahiye — uske baad sab offline.")
         } else {
@@ -72,10 +72,52 @@ object SpeechEngine {
     /** Progress bar ke liye: har 1% par 0..100 milta hai (MainActivity set karta hai). */
     @Volatile var pctListener: ((Int) -> Unit)? = null
 
+    /**
+     * v4.23: LITE/PRO ke andar bundled voice model (urdu-hindi) — internet ke bina
+     * pehli baar storage mein install ho jata hai. Voice ab out-of-the-box chalta hai.
+     * true = model ready (pehle se tha ya ab install hua).
+     */
+    fun installBundled(ctx: Context): Boolean {
+        val m = find("urdu-hindi") ?: return false
+        val out = dir(ctx, m)
+        if (out.exists()) return true
+        return try {
+            val tmp = File(ctx.cacheDir, "bundled-voice.zip")
+            ctx.assets.open("voice/vosk-model-small-hi-0.22.zip").use { input ->
+                FileOutputStream(tmp).use { fos -> input.copyTo(fos) }
+            }
+            val tmpDir = File(out.parentFile.path, "_tmp_bundled")
+            tmpDir.deleteRecursively()
+            tmpDir.mkdirs()
+            ZipInputStream(tmp.inputStream()).use { zis ->
+                var entry = zis.nextEntry
+                val canonicalBase = tmpDir.canonicalPath + File.separator
+                while (entry != null) {
+                    val outFile = File(tmpDir, entry.name)
+                    if (!outFile.canonicalPath.startsWith(canonicalBase)) { zis.closeEntry(); entry = zis.nextEntry; continue }
+                    if (entry.isDirectory) outFile.mkdirs()
+                    else {
+                        outFile.parentFile?.mkdirs()
+                        FileOutputStream(outFile).use { fos -> zis.copyTo(fos) }
+                    }
+                    zis.closeEntry()
+                    entry = zis.nextEntry
+                }
+            }
+            tmp.delete()
+            val inner = tmpDir.listFiles()?.firstOrNull { it.isDirectory }
+            if (inner == null) { tmpDir.deleteRecursively(); return false }
+            out.deleteRecursively()
+            if (!inner.renameTo(out)) { inner.copyRecursively(out); tmpDir.deleteRecursively() }
+            out.exists()
+        } catch (_: Exception) { false }
+    }
+
     /** Model download + unzip (zip-slip safe). Background thread se call karo. */
     fun download(ctx: Context, m: VoiceModel, progress: (String) -> Unit): String {
         val out = dir(ctx, m)
         if (out.exists()) return "✅ ${m.display} already downloaded hai."
+        if (m.name == "urdu-hindi" && installBundled(ctx)) return "✅ ${m.display} install ho gaya — APK ke andar bundled tha, internet ki zaroorat nahi padi. Ab mic 🎤 chalu hai."
         return try {
             progress("⬇️ ${m.display} download shuru (${m.size})...")
             val conn = URL(m.url).openConnection() as HttpURLConnection
