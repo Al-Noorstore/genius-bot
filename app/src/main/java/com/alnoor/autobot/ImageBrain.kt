@@ -187,20 +187,49 @@ object ImageBrain {
         }
     }
 
-    /** Vision: image file padho */
+    /** Read an image offline first (on-device OCR); use cloud vision only when a key exists and user asks for visual interpretation. */
     fun readImage(ctx: Context, path: String, question: String = "Is image mein kya hai? Detail mein batao."): String {
-        val k = KeyStore.active(ctx)
-            ?: return "❌ API key chahiye (Gemini vision best): api key gemini <key>"
         val f = File(path)
         if (!f.isFile) return "❌ File nahi mili: $path"
+        val local = readImageTextOffline(f)
+        val k = KeyStore.active(ctx)
+        if (k == null) return if (local.isNotBlank()) "📴 Offline image text (on-device OCR):\n$local\n\nNote: OCR text read karta hai; icons/meaning ki full visual understanding nahi." else "❌ Offline OCR text nahi parh saka. Behtar visual analysis ke liye optional Gemini/OpenAI vision key configure karein."
         return try {
-            when (k.provider) {
+            val cloud = when (k.provider) {
                 "Gemini" -> visionGemini(k, f, question)
                 else -> visionOpenAI(k, f, question)
             }
+            if (cloud.startsWith("❌") && local.isNotBlank()) "📴 Cloud vision unavailable; local OCR result:\n$local" else cloud
         } catch (e: Exception) {
-            "❌ Vision fail: ${e.message}"
+            if (local.isNotBlank()) "📴 Cloud vision unavailable; local OCR result:\n$local" else "❌ Vision fail: ${e.message}"
         }
+    }
+
+    /** ML Kit OCR on-device. No screenshot/image is uploaded by this method. */
+    private fun readImageTextOffline(f: File): String {
+        return try {
+            val decoded = BitmapFactory.decodeFile(f.absolutePath) ?: return ""
+            // Keep OCR responsive on lower-RAM phones; shrink huge screenshots before inference.
+            val maxSide = 1600
+            val scale = if (maxOf(decoded.width, decoded.height) > maxSide) maxSide.toFloat() / maxOf(decoded.width, decoded.height) else 1f
+            val bitmap = if (scale < 1f) Bitmap.createScaledBitmap(decoded, (decoded.width * scale).toInt().coerceAtLeast(1), (decoded.height * scale).toInt().coerceAtLeast(1), true) else decoded
+            if (bitmap !== decoded) decoded.recycle()
+            val image = com.google.mlkit.vision.common.InputImage.fromBitmap(bitmap, 0)
+            val recognizer = com.google.mlkit.vision.text.TextRecognition.getClient(
+                com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS
+            )
+            val latch = java.util.concurrent.CountDownLatch(1)
+            var result = ""
+            var failure: Exception? = null
+            recognizer.process(image)
+                .addOnSuccessListener { visionText -> result = visionText.text }
+                .addOnFailureListener { e -> failure = e }
+                .addOnCompleteListener { latch.countDown() }
+            if (!latch.await(6, java.util.concurrent.TimeUnit.SECONDS)) result = ""
+            recognizer.close()
+            bitmap.recycle()
+            if (failure != null) "" else result.trim()
+        } catch (_: Exception) { "" }
     }
 
     private fun fileToJpegBase64(f: File, maxSide: Int = 1280): Pair<String, String> {

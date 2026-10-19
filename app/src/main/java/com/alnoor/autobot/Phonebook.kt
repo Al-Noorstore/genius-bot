@@ -65,16 +65,77 @@ object Phonebook {
         return out
     }
 
-    /** Naam se fuzzy match — exact / startsWith / contains */
+    /**
+     * Smart offline contact matching. Normalizes common Roman-Urdu/English spelling
+     * variants, ranks exact/token/prefix/substring/fuzzy matches, and returns several
+     * close candidates so callers can ask the user instead of silently guessing.
+     */
+    fun normalizeName(value: String): String {
+        var s = value.lowercase(java.util.Locale.ROOT)
+            .replace("khaliq", "khalik")
+            .replace("khaleq", "khalik")
+            .replace("khalek", "khalik")
+            .replace("q", "k")
+            .replace("ph", "f")
+            .replace("aa", "a")
+            .replace("ee", "i")
+            .replace("ii", "i")
+            .replace("oo", "u")
+            .replace("ou", "u")
+        s = s.replace(Regex("[^\\p{L}\\p{M}0-9]+"), " ").trim()
+        return s.replace(Regex("\\s+"), " ")
+    }
+
+    private fun editDistance(a: String, b: String): Int {
+        if (a == b) return 0
+        if (a.isEmpty()) return b.length
+        if (b.isEmpty()) return a.length
+        var prev = IntArray(b.length + 1) { it }
+        for (i in a.indices) {
+            val cur = IntArray(b.length + 1)
+            cur[0] = i + 1
+            for (j in b.indices) {
+                val cost = if (a[i] == b[j]) 0 else 1
+                cur[j + 1] = minOf(cur[j] + 1, prev[j + 1] + 1, prev[j] + cost)
+            }
+            prev = cur
+        }
+        return prev[b.length]
+    }
+
+    private fun matchScore(query: String, name: String): Int {
+        val q = normalizeName(query)
+        val n = normalizeName(name)
+        if (q.isBlank() || n.isBlank()) return 0
+        if (q == n) return 100
+        if (n.startsWith(q) || q.startsWith(n)) return 88
+        if (n.contains(q) || q.contains(n)) return 82
+        val qt = q.split(' ').filter { it.isNotBlank() }
+        val nt = n.split(' ').filter { it.isNotBlank() }
+        val overlap = qt.count { token -> nt.any { it == token || (minOf(it.length, token.length) >= 4 && editDistance(it, token) <= 1) } }
+        if (overlap > 0) {
+            val ratio = overlap.toDouble() / maxOf(qt.size, nt.size)
+            if (ratio >= 0.5) return (65 + ratio * 20).toInt()
+        }
+        val dist = editDistance(q, n)
+        val maxLen = maxOf(q.length, n.length)
+        if (maxLen >= 5 && dist <= maxOf(2, maxLen / 4)) return (70.0 * (1.0 - dist.toDouble() / maxLen)).toInt()
+        return 0
+    }
+
     fun findByName(ctx: Context, query: String, max: Int = 8): List<Entry> {
-        val q = query.trim().lowercase()
+        val q = normalizeName(query)
         if (q.length < 2) return emptyList()
-        val all = all(ctx)
-        val exact = all.filter { it.name.lowercase() == q }
-        if (exact.isNotEmpty()) return exact.take(max)
-        val start = all.filter { it.name.lowercase().startsWith(q) }
-        if (start.isNotEmpty()) return start.take(max)
-        return all.filter { it.name.lowercase().contains(q) }.take(max)
+        val entries = all(ctx)
+        // Collapse repeated contact rows only when both displayed name and number match.
+        val ranked = entries.distinctBy { normalizeName(it.name) + "|" + it.number.replace(Regex("[^0-9+]"), "") }
+            .map { it to matchScore(q, it.name) }
+            .filter { it.second >= 45 }
+            .sortedWith(compareByDescending<Pair<Entry, Int>> { it.second }.thenBy { it.first.name.lowercase(java.util.Locale.ROOT) })
+        if (ranked.isEmpty()) return emptyList()
+        val top = ranked.first().second
+        // If best matches are uncertain/close, keep multiple options for voice/text selection.
+        return ranked.filter { it.second >= maxOf(45, top - 12) }.take(max).map { it.first }
     }
 
     fun listText(ctx: Context, q: String? = null): String {

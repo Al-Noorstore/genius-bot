@@ -3,6 +3,13 @@ package com.alnoor.autobot
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.graphics.Path
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import java.io.File
+import java.io.FileOutputStream
 import android.graphics.Rect
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -88,6 +95,49 @@ class AutoBotAccessibilityService : AccessibilityService() {
         var onLockNeedsHelpStatic: ((String, String) -> Unit)? = null   // (pkg, reason)
 
         fun isOn(): Boolean = instance != null
+
+        /** Capture the currently visible display on Android 11+ using the user's enabled accessibility service. */
+        fun captureScreen(callback: (Result<String>) -> Unit) {
+            val svc = instance
+            if (svc == null) { callback(Result.failure(IllegalStateException("Accessibility service OFF"))); return }
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+                callback(Result.failure(UnsupportedOperationException("Live screenshot capture needs Android 11 or newer"))); return
+            }
+            try {
+                svc.takeScreenshot(0, svc.mainExecutor, object : AccessibilityService.TakeScreenshotCallback {
+                    override fun onSuccess(result: AccessibilityService.ScreenshotResult) {
+                        try {
+                            val buffer = result.hardwareBuffer
+                            val bitmap = Bitmap.wrapHardwareBuffer(buffer, result.colorSpace)
+                                ?: throw IllegalStateException("Screenshot bitmap unavailable")
+                            val copy = bitmap.copy(Bitmap.Config.ARGB_8888, false)
+                            buffer.close()
+                            val dir = File(svc.cacheDir, "genius_screen").apply { mkdirs() }
+                            val file = File(dir, "screen_${System.currentTimeMillis()}.png")
+                            FileOutputStream(file).use { out -> if (!copy.compress(Bitmap.CompressFormat.PNG, 100, out)) throw IllegalStateException("PNG save failed") }
+                            copy.recycle()
+                            // Keep cache bounded: remove older captures beyond the latest 5.
+                            dir.listFiles()?.filter { it.isFile && it != file }?.sortedByDescending { it.lastModified() }?.drop(4)?.forEach { it.delete() }
+                            callback(Result.success(file.absolutePath))
+                        } catch (e: Exception) { callback(Result.failure(e)) }
+                    }
+                    override fun onFailure(errorCode: Int) {
+                        callback(Result.failure(IllegalStateException("Screenshot failed (code $errorCode)")))
+                    }
+                })
+            } catch (e: Exception) { callback(Result.failure(e)) }
+        }
+
+        /** Safe label-based tap: accessibility node first, then verify whether the active UI changed. */
+        fun tapTextVerified(label: String, callback: (String) -> Unit) {
+            val before = readScreen()
+            val result = tapText(label)
+            if (result != "OK") { callback("Tap not completed: $result"); return }
+            Handler(Looper.getMainLooper()).postDelayed({
+                val after = readScreen()
+                callback(if (after.isNotBlank() && after != before) "Tap sent; screen content changed (verified)." else "Tap sent, but result could not be verified. Please check the screen.")
+            }, 700)
+        }
 
         fun readScreen(): String {
             val svc = instance ?: return ""

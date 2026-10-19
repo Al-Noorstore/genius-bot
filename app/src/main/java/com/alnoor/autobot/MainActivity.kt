@@ -317,6 +317,9 @@ class MainActivity : AppCompatActivity() {
     private var pendingCallPhone: String? = null
     private var pendingCallName: String? = null
     private var pendingCallKind: String = "sim" // sim | wa | wavideo
+    // Accessible voice/text disambiguation for fuzzy phonebook matches.
+    private var pendingContactChoices: List<Pair<String, String>> = emptyList()
+    private var pendingContactChoiceSim: Int? = null
 
 
     private fun runPython(code: String, fromChat: Boolean = false) {
@@ -1788,6 +1791,52 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun runCommand(low: String, msg: String): Boolean {
+        // Teach Genius: user-defined local phrase/action rules; safe allow-list only.
+        try {
+            val teachReply = TeachGenius.manage(this, msg)
+            if (teachReply != null) { chatReply(teachReply); return true }
+            val trainedReply = TeachGenius.execute(this, msg)
+            if (trainedReply != null) { chatReply(trainedReply); return true }
+        } catch (_: Exception) { /* training must never break normal commands */ }
+        // Accessible contact choice: supports spoken "first/second", Roman Urdu ordinals,
+        // list numbers, last digits of a phone number, and cancel. Never silently pick one.
+        if (pendingContactChoices.isNotEmpty()) {
+            val choices = pendingContactChoices
+            val normalized = low.trim().replace(Regex("[.!?,]"), "")
+            val cancelChoice = normalized in setOf("cancel", "cancel karo", "nahi", "nahin", "no", "stop", "choro", "chor do", "rehne do")
+            val ordinal = when {
+                Regex("\\b(1|one|first|pehla|pehli|pahla|pahli|number one)\\b").containsMatchIn(normalized) -> 1
+                Regex("\\b(2|two|second|doosra|dusra|doosri|dusri|number two)\\b").containsMatchIn(normalized) -> 2
+                Regex("\\b(3|three|third|teesra|tisra|teesri)\\b").containsMatchIn(normalized) -> 3
+                Regex("\\b(4|four|fourth|chautha|chotha)\\b").containsMatchIn(normalized) -> 4
+                Regex("\\b(5|five|fifth|panchwa|paanchwa)\\b").containsMatchIn(normalized) -> 5
+                else -> null
+            }
+            val digitTail = Regex("\\d{3,}").find(normalized)?.value
+            val selected = when {
+                cancelChoice -> { pendingContactChoices = emptyList(); pendingContactChoiceSim = null; chatReply("Theek hai, call cancel kar di."); return true }
+                ordinal != null && ordinal in 1..choices.size -> choices[ordinal - 1]
+                digitTail != null -> choices.firstOrNull { it.second.filter(Char::isDigit).endsWith(digitTail.takeLast(7)) || it.second.filter(Char::isDigit).endsWith(digitTail) }
+                else -> choices.firstOrNull { it.first.equals(msg.trim(), true) }
+                    ?: choices.firstOrNull { Phonebook.normalizeName(it.first) == Phonebook.normalizeName(msg) }
+            }
+            if (selected != null) {
+                pendingContactChoices = emptyList()
+                val sim = pendingContactChoiceSim
+                pendingContactChoiceSim = null
+                startSmartCall(selected.first, selected.second, sim)
+                return true
+            }
+            // A different clear command should not be swallowed as a contact choice.
+            val isChoiceAttempt = normalized in setOf("first", "second", "third", "pehla", "pehli", "pahla", "pahli", "doosra", "dusra", "doosri", "dusri") ||
+                Regex("^\\d{1,2}$").matches(normalized) || normalized.contains("wala") || normalized.contains("wali") || normalized.contains("ending")
+            if (isChoiceAttempt) {
+                chatReply("In mein se ek option bolo: ${choices.mapIndexed { i, c -> "${i + 1}, ${c.first}, number ke aakhri digits ${c.second.filter(Char::isDigit).takeLast(4)}" }.joinToString("; ")}. Ya 'cancel' bolo.")
+                return true
+            }
+            pendingContactChoices = emptyList()
+            pendingContactChoiceSim = null
+        }
         // ---------- v4.12: chat se bhi Termux: "tx pkg install python" ----------
         if ((low.startsWith("tx ") || low.startsWith("termux ")) && !Regex("^termux\\s+(kholo|khol|open|band|close|chalao)").containsMatchIn(low)) {
             runShell(msg.trim(), fromChat = true); return true
@@ -2208,6 +2257,23 @@ Aur dekhna ho to: `help`""")
                         "phonebook" -> runOnUiThread { brainSavePhonebook(a.arg, a.arg2) }
                         "closeapp" -> Thread { chatReply(closeAppByName(a.arg)) }.start()
                         "youtubesearch" -> runOnUiThread { openUrl("https://www.youtube.com/results?search_query=" + java.net.URLEncoder.encode(a.arg, "UTF-8")) }
+                        "appurlsearch" -> runOnUiThread {
+                            val parts = a.arg2.split("|")
+                            val browser = parts.getOrNull(0).orEmpty()
+                            val destination = parts.getOrNull(1).orEmpty()
+                            val encoded = java.net.URLEncoder.encode(a.arg, "UTF-8")
+                            val url = if (destination == "youtube") "https://www.youtube.com/results?search_query=$encoded" else "https://www.google.com/search?q=$encoded"
+                            try {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                                    if (browser == "chrome") setPackage("com.android.chrome")
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                startActivity(intent)
+                            } catch (_: Exception) {
+                                openUrl(url)
+                                chatReply("Requested browser available nahi tha; default browser mein khol diya.")
+                            }
+                        }
                         "browsersearch" -> runOnUiThread { openUrl("https://www.google.com/search?q=" + java.net.URLEncoder.encode(a.arg, "UTF-8")) }
                         "browsernewtabsearch" -> runOnUiThread {
                             val url = if (a.arg.isBlank()) "https://www.google.com" else "https://www.google.com/search?q=" + java.net.URLEncoder.encode(a.arg, "UTF-8")
@@ -2816,7 +2882,21 @@ Aur dekhna ho to: `help`""")
             return true
         }
 
-        // ---------- images: generate / read / WA ----------
+        // ---------- live screen capture + hybrid OCR/vision ----------
+        if (low in setOf("capture screen", "screenshot lo", "screen capture karo", "analyze current screen", "analyse current screen", "screen ko parho", "screen analyze karo", "screen analyse karo", "live screen read")) {
+            chatReply("📸 Screen capture kar raha hoon… Android 11+ aur Accessibility permission zaroori hai.")
+            AutoBotAccessibilityService.captureScreen { result ->
+                result.onSuccess { path ->
+                    getSharedPreferences("genius_visual", 0).edit().putString("last_capture", path).apply()
+                    Thread {
+                        val question = "Analyze this current phone screenshot. Read visible text, describe visible controls and layout, and suggest safe next actions. Do not claim a button was pressed."
+                        val answer = ImageBrain.readImage(this, path, question)
+                        runOnUiThread { chatReply("📷 Current screen analysis:\n$answer\n\nSaved locally in temporary cache. Say ‘capture screen’ to refresh.") }
+                    }.start()
+                }.onFailure { e -> runOnUiThread { chatReply("❌ Live capture failed: ${e.message ?: "unknown error"}. Android 11+ aur Genius Bot Accessibility service ON check karein.") } }
+            }
+            return true
+        }
         if (low.startsWith("image generate ") || low.startsWith("generate image ") || low.startsWith("img gen ")) {
             val prompt = when {
                 low.startsWith("image generate ") -> msg.substringAfter("generate ").trim()
@@ -2852,7 +2932,7 @@ Aur dekhna ho to: `help`""")
             }
             val file = when {
                 pathPart.isNotBlank() && java.io.File(pathPart).isFile -> java.io.File(pathPart)
-                else -> ImageBrain.lastGenerated(this)
+                else -> ImageBrain.lastGenerated(this) ?: getSharedPreferences("genius_visual", 0).getString("last_capture", null)?.let { java.io.File(it).takeIf { f -> f.isFile } }
             }
             if (file == null) {
                 chatReply("❌ Image path do ya pehle generate karo.\nimage padho /sdcard/.../pic.jpg | ye kya hai?")
@@ -4174,9 +4254,12 @@ ipa download
             when {
                 hits.isEmpty() && phoneDirect == null -> chatReply("❌ Koi match nahi: $target\ncontacts / client list dekho")
                 hits.size > 1 -> {
-                    val sb = StringBuilder("📞 Multiple matches — kis ko call?\n")
-                    hits.take(10).forEachIndexed { i, p -> sb.append("${i + 1}. ${p.first} — ${p.second}\n") }
-                    chatReply(sb.append("Poora naam ya number likho (e.g. call Rizwan Bai)").toString())
+                    pendingContactChoices = hits.take(10)
+                    pendingContactChoiceSim = forcedSim
+                    val sb = StringBuilder("👥 ${pendingContactChoices.size} milte-julte contacts mile. Ghalat call se bachne ke liye pehle select karein:\n")
+                    pendingContactChoices.forEachIndexed { i, p -> sb.append("${i + 1}. ${p.first} — ${p.second} (number ke aakhri digits ${p.second.filter(Char::isDigit).takeLast(4)})\n") }
+                    sb.append("Aap bol sakte hain: 'pehla wala', 'doosra wala', option number, ya number ke aakhri digits. Cancel ke liye 'cancel' bolein.")
+                    chatReply(sb.toString())
                 }
                 else -> {
                     val (nm, ph) = if (phoneDirect != null) (phoneDirect to phoneDirect) else hits[0]
@@ -4610,6 +4693,9 @@ ipa download
         if (!vc.isNullOrBlank()) {
             intent?.removeExtra("voice_cmd")
             android.os.Handler(mainLooper).postDelayed({ voiceCommand(vc) }, 2500)
+        } else if (intent?.getBooleanExtra("start_voice", false) == true) {
+            intent?.removeExtra("start_voice")
+            android.os.Handler(mainLooper).postDelayed({ startVoiceCommand() }, 700)
         }
     }
 
@@ -4618,6 +4704,7 @@ ipa download
         setIntent(intent)
         val vc = intent.getStringExtra("voice_cmd")
         if (!vc.isNullOrBlank()) { intent.removeExtra("voice_cmd"); voiceCommand(vc) }
+        else if (intent.getBooleanExtra("start_voice", false)) { intent.removeExtra("start_voice"); android.os.Handler(mainLooper).postDelayed({ startVoiceCommand() }, 500) }
     }
 
     override fun onDestroy() {
@@ -4824,7 +4911,7 @@ ipa download
                 }
             },
             onFinal = { f ->
-                runOnUiThread { sendAsTyped(f) }
+                runOnUiThread { voiceMicOff(); sendAsTyped(f) }
             },
             onFail = { e ->
                 runOnUiThread {

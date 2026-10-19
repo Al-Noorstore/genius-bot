@@ -67,11 +67,11 @@ class AssistantOverlayService : Service() {
             box.elevation = dp(10).toFloat()
             val t = TextView(this).apply {
                 text = "◉"; textSize = 27f; gravity = Gravity.CENTER; setTextColor(Color.WHITE)
-                contentDescription = "${Jarvis.assistantName(this@AssistantOverlayService)} voice assistant. Tap to open chat."
+                contentDescription = "${Jarvis.assistantName(this@AssistantOverlayService)} hands-free assistant. Tap to start listening; say a command or ask what is on screen."
             }
             box.addView(t, FrameLayout.LayoutParams(-1, -1))
             box.setOnClickListener {
-                try { startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)) } catch (_: Throwable) { }
+                try { startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra("start_voice", true)) } catch (_: Throwable) { }
                 removeOverlay(); stopSelf()
             }
             val type = if (Build.VERSION.SDK_INT >= 26) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY else WindowManager.LayoutParams.TYPE_PHONE

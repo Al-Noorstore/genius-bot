@@ -20,8 +20,8 @@ android {
         applicationId isLite ? "com.alnoor.geniusbot" : "com.alnoor.geniusbot.pro"
         minSdk 24
         targetSdk 34
-        versionCode 63
-        versionName isLite ? "4.23-LITE" : "4.23-PRO"
+        versionCode 64
+        versionName isLite ? "4.24-LITE" : "4.24-PRO"
         ndk { abiFilters 'arm64-v8a', 'armeabi-v7a' }
         resValue "string", "app_label", "Genius Bot"
 
@@ -95,4 +95,6 @@ dependencies {
     implementation 'com.alphacephei:vosk-android:0.3.75'
     // v3.0: libsu — asli shell engine (root su support ke saath)
     implementation 'com.github.topjohnwu.libsu:core:6.0.0'
+    // v4.24: on-device OCR (ML Kit text recognition) — screenshots/images ka text offline
+    implementation 'com.google.mlkit:text-recognition:16.0.1'
 }

@@ -441,6 +441,47 @@ object OfflineBrain {
 
     private fun cleanQuery(q: String): String = q.trim().replace(Regex("[?.!]+"), "").trim()
 
+    /** Local intent/entity parser: separate command, destination and query. */
+    private data class SearchIntent(val destination: String, val browser: String?, val query: String, val play: Boolean)
+
+    private fun parseSearchIntent(msg: String): SearchIntent? {
+        val s = msg.lowercase(Locale.ROOT)
+            .replace(Regex("[‘’\\\"“”]"), " ")
+            .replace(Regex("[!?.,؛،]+"), " ")
+            .replace(Regex("\\s+"), " ").trim()
+        if (s.isBlank()) return null
+        val youtube = Regex("\\b(youtube|you tube|یوٹیوب|यूट्यूब)\\b").containsMatchIn(s)
+        val chrome = Regex("\\b(chrome|google chrome)\\b").containsMatchIn(s)
+        val browser = Regex("\\b(browser|web browser|internet browser)\\b").containsMatchIn(s)
+        val google = Regex("\\bgoogle\\b|گوگل|गूगल").containsMatchIn(s)
+        val searchVerb = Regex("\\b(search|searching|find|look up|lookup|dhoondo|dhundo|dhoondho|dhoond|dekho|dekh|talash|سرچ|تلاش|सर्च|खोजो|ढूंढो)\\b").containsMatchIn(s)
+        val playVerb = Regex("\\b(play|chalao|chala|bajao|baja do|lagao|sunao|چلاؤ|بجاؤ|चलाओ|बजाओ)\\b").containsMatchIn(s)
+        val openVerb = Regex("\\b(open|launch|start|kholo|khol|kholna|chalu|shuru|کھولو|खोलो)\\b").containsMatchIn(s)
+        val hasIntent = searchVerb || playVerb || (youtube && openVerb) || ((chrome || browser || google) && searchVerb)
+        if (!hasIntent) return null
+        val destination = when { youtube -> "youtube"; google || chrome || browser -> "google"; else -> return null }
+        val browserApp = when { chrome -> "chrome"; browser -> "browser"; else -> null }
+        val removePhrases = listOf(
+            "google chrome", "you tube", "web browser", "internet browser", "search about", "search for", "look up", "lookup",
+            "search karo", "search kar", "search kro", "search krdo", "search kardo", "search", "find", "dhoondo", "dhundo", "dhoondho", "dhoond", "dekho", "dekh", "talash",
+            "play", "playing", "chalao", "chala", "bajao", "baja do", "lagao", "sunao", "open", "launch", "start", "kholo", "kholna", "khol", "chalu", "shuru",
+            "youtube", "you tube", "chrome", "browser", "google", "یوٹیوب", "گوگل", "यूट्यूब", "गूगल",
+            "on", "in", "at", "par", "pe", "per", "mein", "main", "pr", "and", "aur", "please", "plz", "karo", "kro", "krdo", "kardo", "kar do", "kar", "do", "de", "hai", "ha", "abhi"
+        )
+        var q = s
+        for (phrase in removePhrases.sortedByDescending { it.length }) {
+            q = q.replace(Regex("(?<![\\p{L}\\p{N}])" + Regex.escape(phrase) + "(?![\\p{L}\\p{N}])"), " ")
+        }
+        q = q.replace(Regex("\\s+"), " ").trim(' ', '-', ':', ';')
+        // Drop generic media nouns only when a specific title/topic follows.
+        if (q.split(Regex("\\s+")).size > 1) q = q.replace(Regex("^(song|geet|gaana|gana|music|track|video|about)\\s+", RegexOption.IGNORE_CASE), "").trim()
+        if (q.isBlank()) {
+            if (youtube && openVerb && !searchVerb && !playVerb) return null
+            if (playVerb) q = "music" else return null
+        }
+        return SearchIntent(destination, browserApp, cleanQuery(q), playVerb)
+    }
+
     // ================= SHORT ANSWERS =================
     private fun isYes(low: String): Boolean {
         val bare = low.replace(Regex("[^\\p{L}\\p{M} ]"), "").trim().trim()
@@ -451,9 +492,21 @@ object OfflineBrain {
         return bare in NO_WORDS || (NO_WORDS.any { it.length > 4 && bare == it })
     }
     private fun pickNumber(low: String, max: Int): Int? {
-        val m = Regex("\\b(\\d{1,2})\\b").find(low) ?: return null
-        val n = m.groupValues[1].toIntOrNull() ?: return null
-        return if (n in 1..max) n else null
+        val n = Regex("\\b(\\d{1,2})\\b").find(low)?.groupValues?.get(1)?.toIntOrNull()
+        if (n != null && n in 1..max) return n
+        val s = low.lowercase(Locale.ROOT).replace(Regex("[^\\p{L}\\p{M}0-9 ]"), " ").replace(Regex("\\s+"), " ").trim()
+        val ordinals = listOf(
+            setOf("first", "pehla", "pehli", "pahla", "pahli", "number one", "one"),
+            setOf("second", "doosra", "dusra", "doosri", "dusri", "number two", "two"),
+            setOf("third", "teesra", "tisra", "teesri", "number three", "three"),
+            setOf("fourth", "chautha", "chotha", "number four", "four"),
+            setOf("fifth", "panchwa", "paanchwa", "number five", "five"),
+            setOf("sixth", "chhata", "number six", "six"),
+            setOf("seventh", "number seven", "seven"),
+            setOf("eighth", "number eight", "eight")
+        )
+        ordinals.forEachIndexed { i, words -> if (i + 1 <= max && words.any { s == it || s.startsWith("$it ") || s.endsWith(" $it") || s.contains(" $it ") }) return i + 1 }
+        return null
     }
 
     /**
@@ -469,8 +522,11 @@ object OfflineBrain {
             "choice" -> {
                 if (isNoW) { pending = null; r.text = t(lang, "Okay, cancelled.", "Theek hai, cancel."); return true }
                 var pick: BrainContact? = null
+                val digitTail = Regex("\\d{3,}").find(low)?.value
                 if (num != null && p.contacts.isNotEmpty()) pick = p.contacts[num - 1]
-                else if (bare.isNotBlank() && p.contacts.isNotEmpty()) {
+                else if (digitTail != null && p.contacts.isNotEmpty()) {
+                    pick = p.contacts.firstOrNull { c -> c.phone.filter(Char::isDigit).endsWith(digitTail.takeLast(7)) }
+                } else if (bare.isNotBlank() && p.contacts.isNotEmpty()) {
                     pick = p.contacts.firstOrNull { c -> c.name.lowercase().contains(bare.lowercase()) }
                         ?: resolve(p.contacts, bare).firstOrNull()
                 }
@@ -817,6 +873,24 @@ object OfflineBrain {
             }
             // alarm word tha lekin time samajh nahi aaya
             r.text = "⏰ Time samajh nahi aaya. Examples:\n• \"alarm lagao 6 baje\"\n• \"subah 6:30 ka alarm\"\n• \"roz ka alarm 7 baje\"\n• \"5 minute ka alarm\" (timer)\n• \"alarm list\" • \"alarm hatao\""
+            return r
+        }
+
+        // ---------- SMART SEARCH ROUTER: action + destination + query ----------
+        // Supports reordered prompts: "YouTube kholo and geet search kro",
+        // "play song God is love at YouTube", "search about trading at YouTube",
+        // and "YouTube open in Chrome and search song".
+        parseSearchIntent(msg)?.let { si ->
+            if (si.browser == "chrome" || si.browser == "browser") {
+                r.text = if (si.destination == "youtube") "Chrome mein YouTube par search: \"${si.query}\"" else "Browser mein Google search: \"${si.query}\""
+                r.actions.add(BrainAction("appurlsearch", si.query, "${si.browser}|${si.destination}"))
+            } else if (si.destination == "youtube") {
+                r.text = if (si.play) "YouTube par \"${si.query}\" dhoondh raha hoon." else "YouTube par search: \"${si.query}\""
+                r.actions.add(BrainAction("youtubesearch", si.query))
+            } else {
+                r.text = "Google par search: \"${si.query}\""
+                r.actions.add(BrainAction("browsersearch", si.query))
+            }
             return r
         }
 

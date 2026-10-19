@@ -101,6 +101,18 @@ object BackgroundCommandDispatcher {
         if (reminder != null) { report(reminder); return true }
         if (handleWhatsAppCall(ctx, cmd.lowercase(Locale.ROOT), report)) return true
         if (handleSimCall(ctx, cmd, report)) return true
+        val low = cmd.lowercase(Locale.ROOT).trim()
+        if (low in setOf("hang up", "end call", "close call", "stop call", "call band karo", "call band kar do", "call kaat do", "kaat do call", "phone kaat do", "disconnect call", "disconnect the call")) {
+            // Route through the existing MainActivity call controller, which handles platform/permission limits.
+            openChat(ctx, "end call")
+            report("Call end karne ki command bhej di. Android/phone app ki permissions aur call state ke mutabiq action ho sakta hai.")
+            return true
+        }
+        if (low in setOf("stop", "cancel", "ruko", "ruk jao", "bas karo", "listening band karo", "sunna band karo")) {
+            PhoneAgent.stop(); AssistantOverlayService.hide(ctx)
+            report("Theek hai, ruk gaya.")
+            return true
+        }
         return false
     }
 

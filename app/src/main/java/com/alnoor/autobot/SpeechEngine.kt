@@ -232,6 +232,7 @@ object SpeechEngine {
                 }
                 override fun onTimeout() {
                     isListening = false
+                    onFail("Koi awaaz detect nahi hui. Mic dobara dabao aur thora qareeb se bolo.")
                 }
             })
             isListening = true
